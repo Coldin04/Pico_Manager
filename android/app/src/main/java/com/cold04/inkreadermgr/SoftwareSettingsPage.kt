@@ -292,7 +292,7 @@ private fun SoftwareSettingsPage(
                     leadingContent = { Icon(Icons.Default.Code, contentDescription = null) },
                     trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
                     modifier = Modifier.clickable {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Coldin04/Pico_Manage_App")))
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Coldin04/Pico_Manager")))
                     },
                 )
             }
