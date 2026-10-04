@@ -4,7 +4,7 @@
   <p><strong>专注阅读，轻松管理。</strong></p>
   <p>原生 Android / iOS 应用 · 多固件适配 · 由 InkReaderLink 驱动</p>
   <p>
-    <a href="https://github.com/Coldin04/Pico_Manage_App/releases">下载 Android 版</a>
+    <a href="https://github.com/Coldin04/Pico_Manager/releases/tag/Android-v0.1.0">下载 Android 版</a>
     · <a href="#设备连接">了解设备连接</a>
     · <a href="https://github.com/Coldin04/InkReaderLink">查看 InkReaderLink</a>
   </p>

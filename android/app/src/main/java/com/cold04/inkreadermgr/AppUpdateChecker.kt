@@ -26,7 +26,7 @@ internal data class AppUpdateCheck(
 
 internal object AppUpdateChecker {
     private const val RELEASES_URL =
-        "https://api.github.com/repos/Coldin04/Pico_Manage_App/releases?per_page=100"
+        "https://api.github.com/repos/Coldin04/Pico_Manager/releases?per_page=100"
     private const val RELEASE_PREFIX = "Android-v"
     private val versionPattern = Regex(
         "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-preview([1-9][0-9]*)?)?$",
