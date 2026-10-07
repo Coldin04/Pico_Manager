@@ -1,7 +1,12 @@
 package com.cold04.inkreadermgr
 
 import android.net.Uri
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.Intent
+import android.app.Activity
 import android.os.Bundle
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -9,6 +14,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -46,7 +53,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.cold04.inkreadermgr.ui.theme.PicoManageTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import uniffi.inkreaderlink_uniffi.SdkFileEntry
 import uniffi.inkreaderlink_uniffi.SdkOperationException
 import java.util.Locale
@@ -60,7 +70,11 @@ class WallpaperManagementActivity : ComponentActivity() {
     }
 }
 
-private data class WallpaperSource(val uri: Uri, val name: String)
+private data class WallpaperSource(
+    val file: File,
+    val name: String,
+    val mimeType: String?,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,9 +97,20 @@ private fun WallpaperManagementPage(onBack: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var reconnectRequired by remember { mutableStateOf(false) }
     var source by remember { mutableStateOf<WallpaperSource?>(null) }
+    var croppedFile by remember { mutableStateOf<File?>(null) }
+    var preparingImage by remember { mutableStateOf(false) }
+    var cropOutput by remember { mutableStateOf<File?>(null) }
     var applyToLockScreen by remember { mutableStateOf(false) }
     var overwriteExisting by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<SdkFileEntry?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            source?.file?.delete()
+            croppedFile?.delete()
+            cropOutput?.delete()
+        }
+    }
 
     fun refresh() {
         if (!canList || loading || busy) return
@@ -112,16 +137,63 @@ private fun WallpaperManagementPage(onBack: () -> Unit) {
                     ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf(String::isNotBlank)
                     ?: "未命名图片"
                 val extension = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
-                if (extension !in extensions) {
+                val mimeType = context.contentResolver.getType(uri)
+                if (extension !in extensions || mimeType?.startsWith("image/") == false) {
                     error = "请选择支持的壁纸图片：${extensions.joinToString { ".$it" }}"
                 } else {
-                    source = WallpaperSource(uri, name)
-                    applyToLockScreen = false
-                    overwriteExisting = false
+                    source?.file?.delete()
+                    source = null
+                    croppedFile?.delete()
+                    croppedFile = null
+                    error = null
+                    preparingImage = true
+                    scope.launch {
+                        try {
+                            val cacheCopy = withContext(Dispatchers.IO) {
+                                val directory = File(context.cacheDir, "wallpaper-editing")
+                                check(directory.isDirectory || directory.mkdirs()) { "无法创建图片缓存" }
+                                val copy = File.createTempFile("source-", ".$extension", directory)
+                                try {
+                                    val input = context.contentResolver.openInputStream(uri)
+                                        ?: throw IllegalStateException("文件选择器无法打开这张图片")
+                                    input.buffered().use { sourceStream ->
+                                        copy.outputStream().buffered().use { outputStream ->
+                                            sourceStream.copyTo(outputStream, 64 * 1024)
+                                        }
+                                    }
+                                    check(copy.length() > 0L) { "选择的图片为空" }
+                                    copy
+                                } catch (cause: Exception) {
+                                    copy.delete()
+                                    throw cause
+                                }
+                            }
+                            source = WallpaperSource(cacheCopy, name, mimeType)
+                            applyToLockScreen = false
+                            overwriteExisting = false
+                        } catch (cause: Exception) {
+                            error = cause.message ?: "无法复制所选图片到缓存"
+                        } finally {
+                            preparingImage = false
+                        }
+                    }
                 }
             } catch (cause: Exception) {
                 error = managerError(cause)
                 reconnectRequired = DeviceSessions.isConnectionFailure(cause)
+            }
+        }
+    }
+
+    val cropLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val output = cropOutput
+        cropOutput = null
+        if (output != null) {
+            if (result.resultCode == Activity.RESULT_OK && output.isFile && output.length() > 0L) {
+                croppedFile?.delete()
+                croppedFile = output
+            } else {
+                output.delete()
             }
         }
     }
@@ -140,7 +212,7 @@ private fun WallpaperManagementPage(onBack: () -> Unit) {
                 actions = {
                     if (canUpload) IconButton(
                         onClick = { filePicker.launch(arrayOf("image/*")) },
-                        enabled = !busy,
+                        enabled = !busy && !preparingImage,
                     ) { Icon(Icons.Default.Add, contentDescription = "上传壁纸") }
                 },
             )
@@ -186,11 +258,85 @@ private fun WallpaperManagementPage(onBack: () -> Unit) {
 
     source?.let { selected ->
         AlertDialog(
-            onDismissRequest = { if (!busy) source = null },
+            onDismissRequest = {
+                if (!busy) {
+                    source = null
+                    selected.file.delete()
+                    croppedFile?.delete()
+                    croppedFile = null
+                }
+            },
             title = { Text(if (overwriteExisting) "替换壁纸" else "上传壁纸") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(selected.name, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        buildString {
+                            append((selected.mimeType?.substringAfter('/')?.uppercase(Locale.ROOT)
+                                ?: selected.name.substringAfterLast('.', "图片").uppercase(Locale.ROOT)))
+                            croppedFile?.let { append(" · 已裁剪") }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val cropExtension = selected.name.substringAfterLast('.', "").lowercase(Locale.ROOT)
+                    val cropSupported = cropExtension in setOf("jpg", "jpeg", "png", "webp")
+                    if (activeDevice?.profile?.displayResolution != null && cropSupported) {
+                        TextButton(
+                            enabled = !busy,
+                            onClick = {
+                                val resolution = activeDevice.profile.displayResolution ?: return@TextButton
+                                try {
+                                    val directory = File(context.cacheDir, "wallpaper-editing").apply { mkdirs() }
+                                    val output = File.createTempFile("cropped-", ".${cropExtension}", directory)
+                                    cropOutput = output
+                                    val inputUri = FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        selected.file,
+                                    )
+                                    val outputUri = FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        output,
+                                    )
+                                    val width = resolution.width.toInt()
+                                    val height = resolution.height.toInt()
+                                    val divisor = greatestCommonDivisor(width, height)
+                                    val intent = Intent("com.android.camera.action.CROP").apply {
+                                        setDataAndType(inputUri, "image/*")
+                                        putExtra("crop", "true")
+                                        putExtra("aspectX", width / divisor)
+                                        putExtra("aspectY", height / divisor)
+                                        putExtra("scale", true)
+                                        putExtra("return-data", false)
+                                        putExtra(MediaStore.EXTRA_OUTPUT, outputUri)
+                                        clipData = ClipData.newRawUri("input", inputUri)
+                                        clipData?.addItem(ClipData.Item(outputUri))
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                                    }
+                                    val grantFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                                    context.packageManager.queryIntentActivities(intent, 0).forEach { resolveInfo ->
+                                        resolveInfo.activityInfo.packageName.let { packageName ->
+                                            context.grantUriPermission(packageName, inputUri, grantFlags)
+                                            context.grantUriPermission(packageName, outputUri, grantFlags)
+                                        }
+                                    }
+                                    cropLauncher.launch(intent)
+                                } catch (cause: ActivityNotFoundException) {
+                                    cropOutput?.delete()
+                                    cropOutput = null
+                                    error = "系统没有可用的图片裁剪器"
+                                } catch (cause: Exception) {
+                                    cropOutput?.delete()
+                                    cropOutput = null
+                                    error = cause.message ?: "无法打开图片裁剪器"
+                                }
+                            },
+                        ) {
+                            Text(if (croppedFile == null) "裁剪图片" else "重新裁剪")
+                        }
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
                             checked = applyToLockScreen,
@@ -218,12 +364,15 @@ private fun WallpaperManagementPage(onBack: () -> Unit) {
                             try {
                                 val result = DeviceSessions.uploadWallpaper(
                                     context = context,
-                                    uri = selected.uri,
+                                    uri = Uri.fromFile(croppedFile ?: selected.file),
                                     fileName = selected.name,
                                     overwrite = overwriteExisting,
                                     applyToLockScreen = applyToLockScreen,
                                 )
                                 source = null
+                                selected.file.delete()
+                                croppedFile?.delete()
+                                croppedFile = null
                                 overwriteExisting = false
                                 error = null
                                 Toast.makeText(
@@ -246,6 +395,9 @@ private fun WallpaperManagementPage(onBack: () -> Unit) {
                                 reconnectRequired = DeviceSessions.isConnectionFailure(cause)
                                 if (cause is SdkOperationException.CommittedWithWarning) {
                                     source = null
+                                    selected.file.delete()
+                                    croppedFile?.delete()
+                                    croppedFile = null
                                     if (canList) {
                                         try {
                                             wallpapers = DeviceSessions.listWallpapers()
@@ -262,10 +414,25 @@ private fun WallpaperManagementPage(onBack: () -> Unit) {
                 ) { Text(if (overwriteExisting) "替换" else "上传") }
             },
             dismissButton = {
-                TextButton(onClick = { source = null; overwriteExisting = false }, enabled = !busy) {
+                TextButton(onClick = {
+                    source = null
+                    selected.file.delete()
+                    croppedFile?.delete()
+                    croppedFile = null
+                    overwriteExisting = false
+                }, enabled = !busy) {
                     Text("取消")
                 }
             },
+        )
+    }
+
+    if (preparingImage) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("准备图片") },
+            text = { CircularProgressIndicator() },
+            confirmButton = {},
         )
     }
 
@@ -318,4 +485,15 @@ private fun formatWallpaperSize(size: ULong): String {
     val kibibytes = size.toDouble() / 1024.0
     if (kibibytes < 1024.0) return "%.1f KiB".format(Locale.getDefault(), kibibytes)
     return "%.1f MiB".format(Locale.getDefault(), kibibytes / 1024.0)
+}
+
+private fun greatestCommonDivisor(first: Int, second: Int): Int {
+    var a = first
+    var b = second
+    while (b != 0) {
+        val remainder = a % b
+        a = b
+        b = remainder
+    }
+    return a.coerceAtLeast(1)
 }

@@ -317,8 +317,11 @@ object DeviceSessions {
 
         val temporary = File.createTempFile("inkreader-wallpaper-", ".$extension", context.cacheDir)
         try {
-            val input = context.contentResolver.openInputStream(uri)
-                ?: throw IOException("无法读取壁纸图片")
+            val input = if (uri.scheme == "file") {
+                uri.path?.let(::File)?.inputStream()
+            } else {
+                context.contentResolver.openInputStream(uri)
+            } ?: throw IOException("无法读取壁纸图片")
             input.buffered().use { source ->
                 temporary.outputStream().buffered().use { destination ->
                     source.copyTo(destination, 64 * 1024)
