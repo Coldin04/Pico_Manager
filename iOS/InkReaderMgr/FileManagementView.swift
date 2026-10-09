@@ -10,12 +10,15 @@ struct FileManagementView: View {
     @State private var loading = false
     @State private var error: String?
     @State private var pendingRename: SdkFileEntry?
-    @State private var pendingMove: SdkFileEntry?
+    @State private var pendingMoveFiles: [SdkFileEntry] = []
     @State private var editValue = ""
     @State private var showingCreateDirectory = false
     @State private var showingMovePicker = false
     @State private var moveDestination: String?
-    @State private var downloadedFile: URL?
+    @State private var downloadedFiles: [URL]?
+    @State private var isEditingEntries = false
+    @State private var selectedEntryPaths: Set<String> = []
+    @State private var showingBatchDeleteConfirmation = false
     @State private var showingUploadPicker = false
     @State private var stagedUploadFiles: [ImportedFile] = []
     @State private var showingUploadReview = false
@@ -74,6 +77,59 @@ struct FileManagementView: View {
         )
     }
 
+    private var selectedEntries: [SdkFileEntry] {
+        visibleEntries.filter { selectedEntryPaths.contains($0.path) }
+    }
+
+    private var canSelectEntries: Bool {
+        manager.supports("files.delete") || manager.supports("files.move") ||
+            manager.supports("files.rename") ||
+            (manager.supports("files.download") && visibleEntries.contains { !$0.kind.isDirectory })
+    }
+
+    private var selectedEntriesCanDownload: Bool {
+        !selectedEntries.isEmpty && selectedEntries.allSatisfy { !$0.kind.isDirectory }
+    }
+
+    private var pageTitle: String {
+        if isEditingEntries { return "已选 \(selectedEntryPaths.count) 项" }
+        if currentPath.isEmpty { return "文件管理" }
+        return currentPath.split(separator: "/").last.map(String.init) ?? "文件"
+    }
+
+    @ViewBuilder
+    private var selectionActionsMenu: some View {
+        Menu {
+            if manager.supports("files.download"), selectedEntriesCanDownload {
+                Button("下载", systemImage: "arrow.down.doc") {
+                    downloadSelectedEntries(selectedEntries)
+                }
+            }
+            if manager.supports("files.move") {
+                Button("移动", systemImage: "folder") {
+                    beginMove(with: selectedEntries)
+                }
+            }
+            if manager.supports("files.rename"), selectedEntries.count == 1, let entry = selectedEntries.first {
+                Button("重命名", systemImage: "pencil") {
+                    pendingRename = entry
+                    editValue = entry.name
+                    endEntrySelection()
+                }
+            }
+            if manager.supports("files.delete") {
+                Button(role: .destructive) {
+                    showingBatchDeleteConfirmation = true
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
+            }
+        } label: {
+            Label("操作", systemImage: "ellipsis.circle")
+        }
+        .disabled(manager.isMutating)
+    }
+
     var body: some View {
         Group {
             if !manager.isConnected {
@@ -120,6 +176,8 @@ struct FileManagementView: View {
             } else {
                 NativeFileList(
                     entries: visibleEntries,
+                    isEditing: $isEditingEntries,
+                    selectedPaths: $selectedEntryPaths,
                     canRename: manager.supports("files.rename"),
                     canDelete: manager.supports("files.delete"),
                     canDownload: manager.supports("files.download"),
@@ -133,7 +191,7 @@ struct FileManagementView: View {
                     },
                     onDelete: delete,
                     onDownload: download,
-                    onMove: { entry in pendingMove = entry; moveDestination = nil; showingMovePicker = true }
+                    onMove: { entry in beginMove(with: [entry]) }
                 )
                 .overlay {
                     if entries.isEmpty && !loading {
@@ -144,14 +202,30 @@ struct FileManagementView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .systemGroupedPageBackground()
-        .navigationTitle(currentPath.isEmpty ? "文件管理" : currentPath.split(separator: "/").last.map(String.init) ?? "文件")
-        .toolbarTitleDisplayMode(currentPath.isEmpty ? .large : .inline)
+        .navigationTitle(pageTitle)
+        .toolbarTitleDisplayMode(isEditingEntries || !currentPath.isEmpty ? .inline : .large)
         .toolbar {
+            ToolbarItem(placement: currentPath.isEmpty ? .topBarLeading : .topBarTrailing) {
+                if canSelectEntries && !visibleEntries.isEmpty {
+                    Button(isEditingEntries ? "完成" : "选择") {
+                        if isEditingEntries {
+                            endEntrySelection()
+                        } else {
+                            isEditingEntries = true
+                        }
+                    }
+                    .disabled(manager.isMutating)
+                }
+            }
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if currentPath.isEmpty {
+                if currentPath.isEmpty && !isEditingEntries {
                     DeviceStatusButton(manager: manager, action: showDevices)
                 }
-                if manager.isConnected && manager.supports("files.list") {
+                if isEditingEntries {
+                    if !selectedEntries.isEmpty {
+                        selectionActionsMenu
+                    }
+                } else if manager.isConnected && manager.supports("files.list") {
                     if manager.supports("files.upload") {
                         if uploadInProgress {
                             if let progress = manager.uploadProgress, progress.total > 0 {
@@ -211,27 +285,39 @@ struct FileManagementView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .onChange(of: showingMovePicker) { _, isPresented in
+            if !isPresented { pendingMoveFiles = [] }
+        }
         .sheet(isPresented: Binding(
-            get: { downloadedFile != nil },
-            set: { if !$0 { cleanupDownload() } }
+            get: { downloadedFiles != nil },
+            set: { if !$0 { cleanupDownloads() } }
         )) {
-            if let downloadedFile {
+            if let downloadedFiles {
                 NavigationStack {
                     VStack(spacing: 20) {
                         Image(systemName: "checkmark.circle.fill").font(.largeTitle).foregroundStyle(.green)
                         Text("下载完成")
-                        ShareLink(item: downloadedFile) {
-                            Label("保存或分享", systemImage: "square.and.arrow.up")
+                        if downloadedFiles.count == 1, let file = downloadedFiles.first {
+                            ShareLink(item: file) {
+                                Label("保存或分享", systemImage: "square.and.arrow.up")
+                            }
+                            .font(.body)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.regular)
+                        } else if !downloadedFiles.isEmpty {
+                            ShareLink(items: downloadedFiles) {
+                                Label("保存或分享 \(downloadedFiles.count) 个文件", systemImage: "square.and.arrow.up")
+                            }
+                            .font(.body)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.regular)
                         }
-                        .font(.body)
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.regular)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .systemGroupedPageBackground()
                     .navigationTitle("下载")
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { cleanupDownload() } } }
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { cleanupDownloads() } } }
                 }
                 .presentationDetents([.medium])
             }
@@ -246,6 +332,12 @@ struct FileManagementView: View {
             Button("继续上传") { uploadSelectedFiles() }
             Button("取消", role: .cancel) { cancelUploadSelection() }
         } message: { Text(uploadReviewMessage) }
+        .alert("删除所选项目？", isPresented: $showingBatchDeleteConfirmation) {
+            Button("删除", role: .destructive) { deleteSelectedEntries() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将删除所选的 \(selectedEntries.count) 个项目。")
+        }
         .alert("替换现有文件？", isPresented: overwriteAlertIsPresented) {
             Button("替换", role: .destructive) {
                 let file = pendingUploadOverwrite
@@ -279,7 +371,9 @@ struct FileManagementView: View {
         loading = true
         defer { loading = false }
         do {
-            entries = try await manager.listFiles(currentPath.isEmpty ? .root : .directory(path: currentPath))
+            let listedEntries = try await manager.listFiles(currentPath.isEmpty ? .root : .directory(path: currentPath))
+            entries = listedEntries
+            selectedEntryPaths.formIntersection(Set(listedEntries.map(\.path)))
             error = nil
         } catch {
             self.error = errorMessage(error)
@@ -290,6 +384,22 @@ struct FileManagementView: View {
         Task {
             do { try await manager.deleteFile(entry); await refreshAsync() }
             catch { self.error = errorMessage(error) }
+        }
+    }
+
+    private func endEntrySelection() {
+        isEditingEntries = false
+        selectedEntryPaths = []
+    }
+
+    private func deleteSelectedEntries() {
+        let files = selectedEntries
+        endEntrySelection()
+        guard !files.isEmpty else { return }
+        Task {
+            do { try await manager.deleteFiles(files) }
+            catch { self.error = errorMessage(error) }
+            await refreshAsync()
         }
     }
 
@@ -314,24 +424,51 @@ struct FileManagementView: View {
     }
 
     private func movePending() {
-        guard let entry = pendingMove, let destination = moveDestination else { return }
-        pendingMove = nil
+        let files = pendingMoveFiles
+        guard !files.isEmpty, let destination = moveDestination else { return }
+        pendingMoveFiles = []
         Task {
-            do { try await manager.moveFile(entry, to: destination); await refreshAsync() }
-            catch { self.error = errorMessage(error) }
+            do {
+                if files.count == 1, let file = files.first {
+                    try await manager.moveFile(file, to: destination)
+                } else {
+                    try await manager.moveFiles(files, to: destination)
+                }
+            } catch {
+                self.error = errorMessage(error)
+            }
+            await refreshAsync()
         }
+    }
+
+    private func beginMove(with files: [SdkFileEntry]) {
+        guard !files.isEmpty else { return }
+        pendingMoveFiles = files
+        moveDestination = nil
+        endEntrySelection()
+        showingMovePicker = true
     }
 
     private func download(_ entry: SdkFileEntry) {
+        downloadSelectedEntries([entry])
+    }
+
+    private func downloadSelectedEntries(_ files: [SdkFileEntry]) {
+        guard !files.isEmpty else { return }
+        endEntrySelection()
         Task {
-            do { downloadedFile = try await manager.download(entry) }
+            do {
+                downloadedFiles = files.count == 1
+                    ? [try await manager.download(files[0])]
+                    : try await manager.downloadFiles(files)
+            }
             catch { self.error = errorMessage(error) }
         }
     }
 
-    private func cleanupDownload() {
-        if let downloadedFile { try? FileManager.default.removeItem(at: downloadedFile) }
-        downloadedFile = nil
+    private func cleanupDownloads() {
+        downloadedFiles?.forEach { try? FileManager.default.removeItem(at: $0) }
+        downloadedFiles = nil
     }
 
     private func receiveUploadFiles(_ result: Result<[URL], Error>) {

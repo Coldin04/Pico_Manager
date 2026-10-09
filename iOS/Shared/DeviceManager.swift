@@ -128,9 +128,18 @@ final class DeviceManager: ObservableObject {
             throw ManagerError.invalidConnectionField("设备类型")
         }
 
-        var normalized = values
+        var normalized: [String: String] = [:]
         for field in definition.connectionFields {
-            let value = normalized[field.key, default: field.kind.isToggle ? "false" : ""].trimmingCharacters(in: .whitespacesAndNewlines)
+            let defaultValue: String
+            switch field.kind {
+            case .toggle:
+                defaultValue = "false"
+            case .choice:
+                defaultValue = "0"
+            case .text, .address:
+                defaultValue = ""
+            }
+            let value = values[field.key, default: defaultValue].trimmingCharacters(in: .whitespacesAndNewlines)
             if field.required && value.isEmpty {
                 throw ManagerError.invalidConnectionField(field.label)
             }
@@ -311,12 +320,26 @@ final class DeviceManager: ObservableObject {
         try await mutate("files.delete", operation: "删除文件") { try await $0.delete(path: file.path) }
     }
 
+    func deleteFiles(_ files: [SdkFileEntry]) async throws {
+        guard !files.isEmpty else { return }
+        try await mutate("files.delete", operation: "删除文件") { client in
+            try await client.deleteFiles(paths: files.map(\.path))
+        }
+    }
+
     func renameFile(_ file: SdkFileEntry, to name: String) async throws {
         try await mutate("files.rename", operation: "重命名") { try await $0.rename(path: file.path, newName: name) }
     }
 
     func moveFile(_ file: SdkFileEntry, to destination: String) async throws {
         try await mutate("files.move", operation: "移动文件") { try await $0.moveFile(path: file.path, destination: destination) }
+    }
+
+    func moveFiles(_ files: [SdkFileEntry], to destination: String) async throws {
+        guard !files.isEmpty else { return }
+        try await mutate("files.move", operation: "移动文件") { client in
+            try await client.moveFiles(paths: files.map(\.path), destination: destination)
+        }
     }
 
     func createDirectory(parent: String, name: String) async throws {
@@ -330,6 +353,27 @@ final class DeviceManager: ObservableObject {
             try await $0.download(path: file.path, destination: destination.path)
         }
         return destination
+    }
+
+    func downloadFiles(_ files: [SdkFileEntry]) async throws -> [URL] {
+        guard !files.isEmpty else { return [] }
+        let destinations = files.map { file in
+            FileManager.default.temporaryDirectory
+                .appendingPathComponent("PicoManager-\(UUID().uuidString)-\(file.name)")
+        }
+        let downloads = files.indices.map { index in
+            SdkFileDownload(path: files[index].path, destination: destinations[index].path)
+        }
+
+        do {
+            try await mutate("files.download", operation: "下载文件") { client in
+                try await client.downloadFiles(files: downloads)
+            }
+            return destinations
+        } catch {
+            destinations.forEach { try? FileManager.default.removeItem(at: $0) }
+            throw error
+        }
     }
 
     func deleteWifiNetwork(_ network: SdkWifiNetwork) async throws {

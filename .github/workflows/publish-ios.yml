@@ -21,11 +21,26 @@ jobs:
         shell: bash
         run: |
           tag="$GITHUB_REF_NAME"
-          if [[ ! "$tag" =~ ^iOS-v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))$ ]]; then
-            echo "Expected an iOS-vX.Y.Z tag; got: $tag" >&2
+          if [[ ! "$tag" =~ ^iOS-v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-preview([1-9][0-9]*)?)?)$ ]]; then
+            echo "Expected an iOS-vX.Y.Z[-previewN] tag; got: $tag" >&2
             exit 1
           fi
-          echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          version="${BASH_REMATCH[1]}"
+          preview_number=0
+          if [[ "$version" == *-preview* ]]; then
+            preview_number="${version##*-preview}"
+            [[ -n "$preview_number" ]] || preview_number=1
+            (( preview_number <= 98 )) || {
+              echo "Preview number must be between 1 and 98" >&2
+              exit 1
+            }
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if (( preview_number > 0 )); then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Resolve pinned iOS InkReaderLink commit
         id: sdk
@@ -42,6 +57,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Identify iOS build toolchain
         id: toolchain
@@ -146,10 +163,10 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
-          name: Pico Manager iOS ${{ steps.release.outputs.version }}
+          name: ${{ github.ref_name }}
           generate_release_notes: true
-          draft: false
-          prerelease: false
+          draft: true
+          prerelease: ${{ steps.release.outputs.prerelease }}
           files: |
             dist/*.ipa
             dist/SHA256SUMS.txt

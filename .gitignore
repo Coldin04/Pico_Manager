@@ -9,6 +9,15 @@ android/app/release/
 # Locally supplied SDK binaries
 android/app/src/main/jniLibs/**/*.so
 iOS/Frameworks/
+
+# Xcode user-specific state
+**/xcuserdata/
+*.xcuserstate
+
+# Locally generated UniFFI headers (the Swift binding is tracked separately)
+iOS/Shared/Generated/InkReaderLink/InkReaderLinkFFI.h
+iOS/Shared/Generated/InkReaderLink/InkReaderLinkFFI.modulemap
+
 docs/research/
 docs/research/crossmux-native-flashing-feasibility.md
 docs/research/read-pico-flashing-feasibility.md

@@ -1,10 +1,14 @@
 import AVFoundation
 import SwiftUI
 
+private struct DeviceEditorRoute: Identifiable {
+    let id = UUID()
+    let existing: SavedDevice?
+}
+
 struct DeviceListView: View {
     @ObservedObject var manager: DeviceManager
-    @State private var showingEditor = false
-    @State private var editingDevice: SavedDevice?
+    @State private var editorRoute: DeviceEditorRoute?
     @State private var connectingID: String?
     @State private var error: String?
 
@@ -19,9 +23,8 @@ struct DeviceListView: View {
                     }
                 },
                 NativeSwipeTableAction(title: "编辑", symbol: "pencil", style: .normal, backgroundColor: .systemBlue) { _, completion in
+                    editorRoute = DeviceEditorRoute(existing: device)
                     completion(false)
-                    editingDevice = device
-                    showingEditor = true
                 }
             ]
         }
@@ -39,13 +42,14 @@ struct DeviceListView: View {
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { editingDevice = nil; showingEditor = true } label: { Image(systemName: "plus") }
+                Button { editorRoute = DeviceEditorRoute(existing: nil) } label: { Image(systemName: "plus") }
                     .accessibilityLabel("添加设备")
             }
         }
-        .sheet(isPresented: $showingEditor, onDismiss: { editingDevice = nil }) {
+        .sheet(item: $editorRoute) { route in
             NavigationStack {
-                DeviceEditorView(manager: manager, existing: editingDevice)
+                DeviceEditorView(manager: manager, existing: route.existing)
+                    .id(route.id)
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -117,7 +121,6 @@ private struct DeviceEditorView: View {
                         Text(device.displayName).tag(device.deviceType)
                     }
                 }
-                .disabled(existing != nil)
             }
 
             if let definition {
@@ -129,6 +132,14 @@ private struct DeviceEditorView: View {
             }
         }
         .systemGroupedForm()
+        .onChange(of: deviceType) { _, selectedType in
+            guard let selectedDefinition = manager.supportedDevices.first(where: { $0.deviceType == selectedType }) else {
+                values = [:]
+                return
+            }
+            let fieldKeys = Set(selectedDefinition.connectionFields.map(\.key))
+            values = values.filter { fieldKeys.contains($0.key) }
+        }
         .navigationTitle(existing == nil ? "添加设备" : "编辑设备")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

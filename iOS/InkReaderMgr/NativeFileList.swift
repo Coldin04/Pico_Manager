@@ -3,6 +3,8 @@ import UIKit
 
 struct NativeFileList: UIViewControllerRepresentable {
     let entries: [SdkFileEntry]
+    @Binding var isEditing: Bool
+    @Binding var selectedPaths: Set<String>
     let canRename: Bool
     let canDelete: Bool
     let canDownload: Bool
@@ -29,9 +31,17 @@ struct NativeFileList: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: UITableViewController, context: Context) {
+        let entriesChanged = context.coordinator.parent.entries != entries
         context.coordinator.parent = self
         context.coordinator.controller = controller
-        controller.tableView.reloadData()
+        controller.tableView.allowsSelection = true
+        controller.tableView.allowsSelectionDuringEditing = true
+        controller.tableView.allowsMultipleSelectionDuringEditing = true
+        if controller.tableView.isEditing != isEditing {
+            controller.setEditing(isEditing, animated: true)
+        }
+        if entriesChanged { controller.tableView.reloadData() }
+        context.coordinator.synchronizeSelection(in: controller.tableView)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
@@ -44,6 +54,13 @@ struct NativeFileList: UIViewControllerRepresentable {
 
         func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
             parent.entries.count
+        }
+
+        func tableView(_ tableView: UITableView, shouldSelectRowAt indexPath: IndexPath) -> Bool {
+            guard parent.isEditing else { return true }
+            let entry = parent.entries[indexPath.row]
+            return parent.canDelete || parent.canMove || parent.canRename ||
+                (parent.canDownload && !entry.kind.isDirectory)
         }
 
         func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -69,14 +86,29 @@ struct NativeFileList: UIViewControllerRepresentable {
 
         func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
             let entry = parent.entries[indexPath.row]
+            if parent.isEditing {
+                var selected = parent.selectedPaths
+                selected.insert(entry.path)
+                parent.selectedPaths = selected
+                return
+            }
             tableView.deselectRow(at: indexPath, animated: true)
             if entry.kind.isDirectory { parent.onOpenDirectory(entry.path) }
+        }
+
+        func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
+            guard parent.isEditing else { return }
+            let entry = parent.entries[indexPath.row]
+            var selected = parent.selectedPaths
+            selected.remove(entry.path)
+            parent.selectedPaths = selected
         }
 
         func tableView(
             _ tableView: UITableView,
             trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
         ) -> UISwipeActionsConfiguration? {
+            guard !parent.isEditing else { return nil }
             let entry = parent.entries[indexPath.row]
             var actions: [UIContextualAction] = []
 
@@ -108,6 +140,7 @@ struct NativeFileList: UIViewControllerRepresentable {
         }
 
         func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+            guard !parent.isEditing else { return nil }
             let entry = parent.entries[indexPath.row]
             var actions: [UIAction] = []
             if !parent.isMutating && parent.canDownload && !entry.kind.isDirectory {
@@ -125,6 +158,20 @@ struct NativeFileList: UIViewControllerRepresentable {
                 guard let self else { return }
                 await parent.onRefresh()
                 controller?.refreshControl?.endRefreshing()
+            }
+        }
+
+        func synchronizeSelection(in tableView: UITableView) {
+            let selectedRows = Set(tableView.indexPathsForSelectedRows ?? [])
+            for (row, entry) in parent.entries.enumerated() {
+                let indexPath = IndexPath(row: row, section: 0)
+                let shouldSelect = parent.isEditing && parent.selectedPaths.contains(entry.path)
+                let isSelected = selectedRows.contains(indexPath)
+                if shouldSelect && !isSelected {
+                    tableView.selectRow(at: indexPath, animated: false, scrollPosition: .none)
+                } else if !shouldSelect && isSelected {
+                    tableView.deselectRow(at: indexPath, animated: false)
+                }
             }
         }
 

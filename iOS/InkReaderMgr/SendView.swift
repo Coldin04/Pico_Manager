@@ -113,6 +113,12 @@ struct SendView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                         .disabled(!canSend)
+                        .confirmationDialog("文件格式提示", isPresented: $showingFormatReview, titleVisibility: .visible) {
+                            Button("继续发送") { startBookUpload() }
+                            Button("取消", role: .cancel) {}
+                        } message: {
+                            Text(reviewMessage)
+                        }
                 }
             }
             .padding(.horizontal, 16)
@@ -139,12 +145,6 @@ struct SendView: View {
             replaceSelection(with: [incoming])
             incomingFile = nil
             chooseDefaultCategory(for: [incoming])
-        }
-        .confirmationDialog("文件格式提示", isPresented: $showingFormatReview, titleVisibility: .visible) {
-            Button("继续发送") { startBookUpload() }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text(reviewMessage)
         }
         .alert("替换现有文件？", isPresented: Binding(
             get: { pendingBookOverwrite != nil },
