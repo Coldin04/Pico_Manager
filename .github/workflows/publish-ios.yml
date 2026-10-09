@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   publish:
-    runs-on: macos-latest
+    runs-on: xcode-27
     env:
       INKREADERLINK_SDK_REPOSITORY: ${{ vars.INKREADERLINK_SDK_REPOSITORY || 'https://github.com/Coldin04/InkReaderLink.git' }}
     steps:
