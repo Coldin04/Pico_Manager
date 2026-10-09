@@ -3,8 +3,12 @@ name: Android Checks
 on:
   push:
     branches: [master]
+    paths:
+      - 'android/**'
   pull_request:
     branches: [master]
+    paths:
+      - 'android/**'
 
 permissions:
   contents: read

@@ -1,0 +1,79 @@
+name: iOS Checks
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'iOS/**'
+      - 'scripts/build-ios-sdk-from-git.sh'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'iOS/**'
+      - 'scripts/build-ios-sdk-from-git.sh'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve pinned InkReaderLink SDK commit
+        id: sdk
+        shell: bash
+        run: |
+          sdk_version="$(cat iOS/inkreaderlink-sdk.version)"
+          if [[ ! "$sdk_version" =~ ^git\.([0-9a-f]{40})$ ]]; then
+            echo "Expected iOS/inkreaderlink-sdk.version to contain git.<full 40-character commit SHA>; got: $sdk_version" >&2
+            exit 1
+          fi
+          echo "version=$sdk_version" >> "$GITHUB_OUTPUT"
+          echo "commit=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+
+      - name: Identify iOS build toolchain
+        id: toolchain
+        shell: bash
+        run: |
+          fingerprint="$( { rustc --version --verbose; xcodebuild -version; } | shasum -a 256 | awk '{print $1}')"
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+
+      - name: Cache source-built iOS SDK
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            iOS/Frameworks
+            iOS/Shared/Generated/InkReaderLink
+          key: inkreaderlink-ios-sdk-v1-${{ steps.sdk.outputs.commit }}-${{ steps.toolchain.outputs.fingerprint }}-${{ hashFiles('scripts/build-ios-sdk-from-git.sh') }}
+
+      - name: Install UniFFI bindgen
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        run: cargo install uniffi --version 0.32.2 --features cli --bin uniffi-bindgen --locked
+
+      - name: Build InkReaderLink iOS SDK from its pinned commit
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        env:
+          INKREADERLINK_SDK_REPOSITORY: ${{ vars.INKREADERLINK_SDK_REPOSITORY || 'https://github.com/Coldin04/InkReaderLink.git' }}
+        run: ./scripts/build-ios-sdk-from-git.sh "${{ steps.sdk.outputs.version }}"
+
+      - name: Build iOS app and Share Extension
+        run: >-
+          xcodebuild
+          -project iOS/InkReaderMgr.xcodeproj
+          -scheme InkReaderMgr
+          -configuration Debug
+          -destination 'generic/platform=iOS'
+          -derivedDataPath "$RUNNER_TEMP/DerivedData"
+          CODE_SIGNING_ALLOWED=NO
+          build
