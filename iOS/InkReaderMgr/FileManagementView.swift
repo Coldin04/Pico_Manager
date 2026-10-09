@@ -64,6 +64,16 @@ struct FileManagementView: View {
         return messages.joined(separator: "；")
     }
 
+    private var overwriteAlertIsPresented: Binding<Bool> {
+        Binding<Bool>(
+            get: { pendingUploadOverwrite != nil },
+            set: { isPresented in
+                guard !isPresented else { return }
+                pendingUploadOverwrite = nil
+            }
+        )
+    }
+
     var body: some View {
         Group {
             if !manager.isConnected {
@@ -236,10 +246,7 @@ struct FileManagementView: View {
             Button("继续上传") { uploadSelectedFiles() }
             Button("取消", role: .cancel) { cancelUploadSelection() }
         } message: { Text(uploadReviewMessage) }
-        .alert("替换现有文件？", isPresented: Binding(
-            get: { pendingUploadOverwrite != nil },
-            set: { if !$0 { pendingUploadOverwrite = nil } }
-        )) {
+        .alert("替换现有文件？", isPresented: overwriteAlertIsPresented) {
             Button("替换", role: .destructive) {
                 let file = pendingUploadOverwrite
                 pendingUploadOverwrite = nil
