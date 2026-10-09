@@ -1,0 +1,156 @@
+name: Publish iOS Unsigned IPA
+
+on:
+  push:
+    tags:
+      - 'iOS-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: macos-latest
+    env:
+      INKREADERLINK_SDK_REPOSITORY: ${{ vars.INKREADERLINK_SDK_REPOSITORY || 'https://github.com/Coldin04/InkReaderLink.git' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate iOS release tag
+        id: release
+        shell: bash
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if [[ ! "$tag" =~ ^iOS-v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))$ ]]; then
+            echo "Expected an iOS-vX.Y.Z tag; got: $tag" >&2
+            exit 1
+          fi
+          echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve pinned iOS InkReaderLink commit
+        id: sdk
+        shell: bash
+        run: |
+          sdk_version="$(cat iOS/inkreaderlink-sdk.version)"
+          if [[ ! "$sdk_version" =~ ^git\.([0-9a-f]{40})$ ]]; then
+            echo "Expected iOS/inkreaderlink-sdk.version to contain git.<full 40-character commit SHA>; got: $sdk_version" >&2
+            exit 1
+          fi
+          echo "version=$sdk_version" >> "$GITHUB_OUTPUT"
+          echo "commit=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+
+      - name: Identify iOS build toolchain
+        id: toolchain
+        shell: bash
+        run: |
+          fingerprint="$( { rustc --version --verbose; xcodebuild -version; } | shasum -a 256 | awk '{print $1}')"
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+
+      - name: Cache source-built iOS SDK
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            iOS/Frameworks
+            iOS/Shared/Generated/InkReaderLink
+          key: inkreaderlink-ios-sdk-v1-${{ steps.sdk.outputs.commit }}-${{ steps.toolchain.outputs.fingerprint }}-${{ hashFiles('scripts/build-ios-sdk-from-git.sh') }}
+
+      - name: Install UniFFI bindgen
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        run: cargo install uniffi --version 0.32.2 --features cli --bin uniffi-bindgen --locked
+
+      - name: Build InkReaderLink iOS SDK from its pinned commit
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        run: ./scripts/build-ios-sdk-from-git.sh "${{ steps.sdk.outputs.version }}"
+
+      - name: Archive app without code signing
+        env:
+          APP_VERSION: ${{ steps.release.outputs.version }}
+        run: >-
+          xcodebuild
+          -project iOS/InkReaderMgr.xcodeproj
+          -scheme InkReaderMgr
+          -configuration Release
+          -destination 'generic/platform=iOS'
+          -archivePath "$RUNNER_TEMP/PicoManager.xcarchive"
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+          CODE_SIGNING_IDENTITY=
+          MARKETING_VERSION="$APP_VERSION"
+          CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
+          archive
+
+      - name: Package and verify unsigned IPA
+        env:
+          APP_VERSION: ${{ steps.release.outputs.version }}
+          SDK_VERSION: ${{ steps.sdk.outputs.version }}
+          SDK_COMMIT: ${{ steps.sdk.outputs.commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$RUNNER_TEMP/PicoManager.xcarchive/Products/Applications/InkReaderMgr.app"
+          ipa_root="$RUNNER_TEMP/ipa"
+          ipa_path="$GITHUB_WORKSPACE/dist/PicoManager-iOS-$APP_VERSION.ipa"
+          mkdir -p "$GITHUB_WORKSPACE/dist" "$ipa_root/Payload"
+          test -d "$app_path"
+
+          app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_path/Info.plist")"
+          [[ "$app_version" == "$APP_VERSION" ]] || {
+            echo "Expected app version $APP_VERSION, got $app_version" >&2
+            exit 1
+          }
+          extension_path="$app_path/PlugIns/PicoManagerShare.appex"
+          app_minimum="$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app_path/Info.plist")"
+          extension_minimum="$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$extension_path/Info.plist")"
+          [[ "$app_minimum" == 17.0 && "$extension_minimum" == 17.0 ]] || {
+            echo "Expected app and Share Extension minimum iOS versions to match at 17.0; got app=$app_minimum extension=$extension_minimum" >&2
+            exit 1
+          }
+          if find "$app_path" \( -name _CodeSignature -o -name embedded.mobileprovision \) -print -quit | grep -q .; then
+            echo "The archived app contains a code signature or provisioning profile." >&2
+            exit 1
+          fi
+
+          ditto "$app_path" "$ipa_root/Payload/$(basename "$app_path")"
+          (cd "$ipa_root" && ditto -c -k --sequesterRsrc --keepParent Payload "$ipa_path")
+          ipa_entries="$(unzip -Z1 "$ipa_path")"
+          if ! grep -E '^Payload/[^/]+\.app/PlugIns/[^/]+\.appex/Info\.plist$' <<< "$ipa_entries" >/dev/null; then
+            echo "The Share Extension is missing from the IPA." >&2
+            exit 1
+          fi
+
+          if grep -E '(^|/)_CodeSignature/|(^|/)embedded\.mobileprovision$' <<< "$ipa_entries" >/dev/null; then
+            echo "The IPA contains signing or provisioning data." >&2
+            exit 1
+          fi
+
+          {
+            echo "Release tag: $GITHUB_REF_NAME"
+            echo "App version: $APP_VERSION"
+            echo "Build number: $GITHUB_RUN_NUMBER"
+            echo "App commit: $(git rev-parse HEAD)"
+            echo "InkReaderLink repository: $INKREADERLINK_SDK_REPOSITORY"
+            echo "InkReaderLink version: $SDK_VERSION"
+            echo "InkReaderLink commit: $SDK_COMMIT"
+            echo "Code signing: disabled"
+          } > "$GITHUB_WORKSPACE/dist/BUILD-INFO.txt"
+          cd "$GITHUB_WORKSPACE/dist"
+          shasum -a 256 ./*.ipa > SHA256SUMS.txt
+          shasum -a 256 -c SHA256SUMS.txt
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Pico Manager iOS ${{ steps.release.outputs.version }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          files: |
+            dist/*.ipa
+            dist/SHA256SUMS.txt
+            dist/BUILD-INFO.txt

@@ -19,3 +19,5 @@ To build from the pinned upstream SDK commit instead of a sibling checkout, inst
 ```
 
 This fetches only that full commit SHA from `INKREADERLINK_SDK_REPOSITORY` (defaulting to the InkReaderLink GitHub repository), builds device and simulator static libraries, regenerates the Swift bindings, and creates the ignored XCFramework. iOS pins its SDK independently in `iOS/inkreaderlink-sdk.version`; it does not inherit the Android Maven coordinate or Android SDK commit. The iOS CI workflow caches generated outputs by the iOS commit SHA.
+
+An `iOS-vX.Y.Z` tag builds a Release archive with code signing disabled, packages it as an unsigned IPA, verifies that the app and Share Extension contain no provisioning profile or signature, and publishes the IPA with build metadata and a SHA-256 checksum. The unsigned IPA must be signed by its distributor before it can be installed on a device.
