@@ -28,6 +28,7 @@ Copyright (C) 2026 Coldin04
 - [RickyOS](http://chinoryunqin.github.io/RickyOS-site) (请使用CrossPoint适配器)
 - [KiikoRead](https://github.com/wegooo-cell/read-pico-reader)
 - [WhiteOS](https://446599.github.io/whiteos/)
+- [JustRead](https://flasher.smn.icu/)
 
 ## 声明
 
