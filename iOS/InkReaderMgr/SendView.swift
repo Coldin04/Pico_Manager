@@ -96,7 +96,9 @@ struct SendView: View {
                                 .progressViewStyle(.linear)
                                 .accessibilityLabel("发送进度")
                                 .accessibilityValue("\(Int(Double(progress.sent) / Double(progress.total) * 100))%")
-                            Text("\(manager.activeOperation ?? "发送中") · \(ByteCountFormatter.string(fromByteCount: Int64(progress.sent), countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: Int64(progress.total), countStyle: .file))")
+                            Text(progress.sent >= progress.total
+                                 ? "等待设备确认…"
+                                 : "\(manager.activeOperation ?? "发送中") · \(ByteCountFormatter.string(fromByteCount: Int64(progress.sent), countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: Int64(progress.total), countStyle: .file))")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         } else {

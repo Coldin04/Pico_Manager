@@ -8,6 +8,14 @@ struct SavedDevice: Codable, Identifiable, Hashable {
     var values: [String: String]
 }
 
+struct ConnectionCredentialRequest: Identifiable {
+    let device: SavedDevice
+    let field: SdkConnectionField
+    let rejected: Bool
+
+    var id: String { "\(device.id):\(field.key)" }
+}
+
 enum SharedAppGroup {
     static let identifier = "group.com.cold04.InkReaderMgr"
 }
@@ -50,14 +58,16 @@ enum ManagerError: LocalizedError {
 
 final class UploadProgressObserver: SdkUploadProgressObserver, @unchecked Sendable {
     weak var manager: DeviceManager?
+    let generation: UInt64
 
-    init(manager: DeviceManager) {
+    init(manager: DeviceManager, generation: UInt64) {
         self.manager = manager
+        self.generation = generation
     }
 
     func onProgress(sentBytes: UInt64, totalBytes: UInt64) {
         Task { @MainActor [weak manager = self.manager] in
-            manager?.recordUploadProgress(sent: sentBytes, total: totalBytes)
+            manager?.recordUploadProgress(sent: sentBytes, total: totalBytes, generation: generation)
         }
     }
 }
@@ -76,6 +86,7 @@ final class DeviceManager: ObservableObject {
     private let storageKey = "savedDevices"
     private let storage: UserDefaults
     private var client: SdkDeviceClient?
+    private var uploadGeneration: UInt64 = 0
 
     init() {
         let storage = UserDefaults(suiteName: SharedAppGroup.identifier) ?? .standard
@@ -123,6 +134,26 @@ final class DeviceManager: ObservableObject {
         supportedDevices.first { $0.deviceType == deviceType }?.displayName ?? deviceType
     }
 
+    func credentialRequest(for error: Error, device: SavedDevice) -> ConnectionCredentialRequest? {
+        guard let sdkError = error as? SdkOperationError else { return nil }
+        let key: String
+        let rejected: Bool
+        switch sdkError {
+        case .CredentialRequired(let requestedKey):
+            key = requestedKey
+            rejected = false
+        case .CredentialRejected(let rejectedKey):
+            key = rejectedKey
+            rejected = true
+        default:
+            return nil
+        }
+        guard let field = definition(for: device)?.connectionFields.first(where: {
+            $0.key == key && $0.retention == .session
+        }) else { return nil }
+        return ConnectionCredentialRequest(device: device, field: field, rejected: rejected)
+    }
+
     func saveDevice(id: String? = nil, deviceType: String, values: [String: String]) throws -> SavedDevice {
         guard let definition = supportedDevices.first(where: { $0.deviceType == deviceType }) else {
             throw ManagerError.invalidConnectionField("设备类型")
@@ -130,13 +161,14 @@ final class DeviceManager: ObservableObject {
 
         var normalized: [String: String] = [:]
         for field in definition.connectionFields {
+            guard field.retention == .appManaged else { continue }
             let defaultValue: String
             switch field.kind {
             case .toggle:
                 defaultValue = "false"
             case .choice:
                 defaultValue = "0"
-            case .text, .address:
+            case .text, .secret, .address:
                 defaultValue = ""
             }
             let value = values[field.key, default: defaultValue].trimmingCharacters(in: .whitespacesAndNewlines)
@@ -180,14 +212,17 @@ final class DeviceManager: ObservableObject {
         persistDevices()
     }
 
-    func connect(_ device: SavedDevice) async throws {
+    func connect(_ device: SavedDevice, sessionValues: [String: String] = [:]) async throws {
         if activeDevice?.id == device.id { return }
         disconnect()
         guard let definition = definition(for: device) else {
             throw ManagerError.invalidConnectionField("设备类型")
         }
         let parameters = try definition.connectionFields.compactMap { field -> SdkConnectionParameter? in
-            guard let value = device.values[field.key] else {
+            let value = field.retention == .session
+                ? sessionValues[field.key]
+                : device.values[field.key]
+            guard let value, !value.isEmpty else {
                 if field.required { throw ManagerError.invalidConnectionField(field.label) }
                 return nil
             }
@@ -195,6 +230,8 @@ final class DeviceManager: ObservableObject {
             switch field.kind {
             case .text:
                 typedValue = .text(value: value)
+            case .secret:
+                typedValue = .secret(value: value)
             case .address:
                 typedValue = .address(value: value)
             case .choice:
@@ -217,14 +254,16 @@ final class DeviceManager: ObservableObject {
     }
 
     func disconnect() {
+        uploadGeneration &+= 1
         client = nil
         profile = nil
         activeDevice = nil
         uploadProgress = nil
     }
 
-    func recordUploadProgress(sent: UInt64, total: UInt64) {
-        uploadProgress = (sent, total)
+    func recordUploadProgress(sent: UInt64, total: UInt64, generation: UInt64) {
+        guard generation == uploadGeneration, isMutating, total > 0 else { return }
+        uploadProgress = (min(sent, total), total)
     }
 
     func listFiles(_ location: SdkFileLocation) async throws -> [SdkFileEntry] {
@@ -257,18 +296,19 @@ final class DeviceManager: ObservableObject {
 
     func upload(_ file: ImportedFile, to location: SdkFileLocation, overwrite: Bool = false) async throws -> SdkUploadResult {
         let currentProfile = try requireProfile("files.upload")
-        let canReportProgress = currentProfile.capabilities.contains("upload.websocket")
-        uploadProgress = nil
-        let observer = canReportProgress ? UploadProgressObserver(manager: self) : nil
+        let preferWebsocket = currentProfile.capabilities.contains("upload.websocket")
         return try await mutate("files.upload", operation: "上传") { client in
-            try await client.upload(
+            self.uploadProgress = nil
+            self.uploadGeneration &+= 1
+            let observer = UploadProgressObserver(manager: self, generation: self.uploadGeneration)
+            return try await client.upload(
                 localPath: file.url.path,
                 fileName: file.name,
                 location: location,
                 options: SdkUploadOptions(
                     conflictPolicy: overwrite ? .overwriteWhenSupported : self.uploadConflictPolicy,
                     contentType: nil,
-                    preferWebsocket: canReportProgress
+                    preferWebsocket: preferWebsocket
                 ),
                 progressObserver: observer
             )
@@ -281,9 +321,12 @@ final class DeviceManager: ObservableObject {
             throw ManagerError.capabilityUnavailable("upload.explicit-overwrite")
         }
         let reportProgress = currentProfile.capabilities.contains("fonts.upload.progress")
-        let observer = reportProgress ? UploadProgressObserver(manager: self) : nil
-        uploadProgress = nil
         try await mutate("fonts.upload", operation: "上传字体") { client in
+            self.uploadProgress = nil
+            self.uploadGeneration &+= 1
+            let observer = reportProgress
+                ? UploadProgressObserver(manager: self, generation: self.uploadGeneration)
+                : nil
             if let observer {
                 try await client.uploadFontWithOverwriteAndProgress(
                     family: family,
@@ -464,6 +507,10 @@ func errorMessage(_ error: Error) -> String {
         detail
     case .Unreachable:
         "无法连接设备，请检查地址和网络"
+    case .CredentialRequired:
+        "设备要求输入连接凭据"
+    case .CredentialRejected:
+        "连接凭据无效，请重新输入"
     case .Timeout:
         "连接超时"
     case .InsufficientStorage:
