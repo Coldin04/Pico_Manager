@@ -229,10 +229,12 @@ struct FileManagementView: View {
                     if manager.supports("files.upload") {
                         if uploadInProgress {
                             if let progress = manager.uploadProgress, progress.total > 0 {
-                                ProgressView(value: Double(progress.sent), total: Double(progress.total))
-                                    .progressViewStyle(.circular)
+                                let percent = Int(Double(progress.sent) / Double(progress.total) * 100)
+                                Label("\(percent)%", systemImage: "arrow.up.doc")
+                                    .labelStyle(.titleAndIcon)
+                                    .monospacedDigit()
                                     .accessibilityLabel("上传进度")
-                                    .accessibilityValue("\(Int(Double(progress.sent) / Double(progress.total) * 100))%")
+                                    .accessibilityValue("\(percent)%")
                             } else {
                                 ProgressView()
                                     .accessibilityLabel("正在上传")
@@ -515,6 +517,7 @@ struct FileManagementView: View {
             for file in acceptableUploadFiles {
                 do {
                     _ = try await manager.upload(file, to: uploadLocation, overwrite: file.id == fileToOverwrite?.id)
+                    manager.uploadProgress = nil
                     removeStagedFiles([file])
                     stagedUploadFiles.removeAll { $0.id == file.id }
                 } catch let sdkError as SdkOperationError {

@@ -11,6 +11,8 @@ struct DeviceListView: View {
     @State private var editorRoute: DeviceEditorRoute?
     @State private var connectingID: String?
     @State private var error: String?
+    @State private var credentialRequest: ConnectionCredentialRequest?
+    @State private var credential = ""
 
     var body: some View {
         NativeSwipeTable(items: manager.savedDevices, content: deviceRow, onSelect: connectOrDisconnect) { device in
@@ -60,6 +62,25 @@ struct DeviceListView: View {
         )) {
             Button("关闭", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
+        .alert(credentialRequest?.rejected == true
+            ? "\(credentialRequest?.field.label ?? "凭据")无效"
+            : "需要\(credentialRequest?.field.label ?? "凭据")", isPresented: Binding(
+            get: { credentialRequest != nil },
+            set: { if !$0 { credentialRequest = nil; credential = "" } }
+        )) {
+            SecureField(credentialRequest?.field.label ?? "凭据", text: $credential)
+            Button("连接") {
+                guard let request = credentialRequest else { return }
+                let value = credential.trimmingCharacters(in: .whitespacesAndNewlines)
+                credential = ""
+                credentialRequest = nil
+                connect(request.device, sessionValues: [request.field.key: value])
+            }
+            .disabled(credential.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button("取消", role: .cancel) { credential = ""; credentialRequest = nil }
+        } message: {
+            Text("请输入设备当前显示的\(credentialRequest?.field.label ?? "凭据")")
+        }
     }
 
     private func connectOrDisconnect(_ device: SavedDevice) {
@@ -67,13 +88,23 @@ struct DeviceListView: View {
             manager.disconnect()
             return
         }
+        connect(device)
+    }
+
+    private func connect(_ device: SavedDevice, sessionValues: [String: String] = [:]) {
+        guard connectingID == nil else { return }
         connectingID = device.id
         Task {
             defer { connectingID = nil }
             do {
-                try await manager.connect(device)
+                try await manager.connect(device, sessionValues: sessionValues)
             } catch {
-                self.error = errorMessage(error)
+                if let request = manager.credentialRequest(for: error, device: device) {
+                    credential = ""
+                    credentialRequest = request
+                } else {
+                    self.error = errorMessage(error)
+                }
             }
         }
     }
@@ -125,7 +156,7 @@ private struct DeviceEditorView: View {
 
             if let definition {
                 Section {
-                    ForEach(definition.connectionFields, id: \.key) { field in
+                    ForEach(definition.connectionFields.filter { $0.retention == .appManaged }, id: \.key) { field in
                         connectionField(field)
                     }
                 }
@@ -137,7 +168,7 @@ private struct DeviceEditorView: View {
                 values = [:]
                 return
             }
-            let fieldKeys = Set(selectedDefinition.connectionFields.map(\.key))
+            let fieldKeys = Set(selectedDefinition.connectionFields.filter { $0.retention == .appManaged }.map(\.key))
             values = values.filter { fieldKeys.contains($0.key) }
         }
         .navigationTitle(existing == nil ? "添加设备" : "编辑设备")
@@ -171,6 +202,8 @@ private struct DeviceEditorView: View {
             TextField(field.label, text: valueBinding(field), prompt: Text(field.required ? "必填" : "可选"))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+        case .secret:
+            SecureField(field.label, text: valueBinding(field), prompt: Text(field.required ? "必填" : "可选"))
         case .address:
             HStack {
                 TextField(field.label, text: valueBinding(field), prompt: Text("IP、主机名或完整 URL"))

@@ -36,6 +36,7 @@ private final class ShareSendModel: ObservableObject {
     @Published var showingFormatReview = false
     @Published var showingCompletion = false
     @Published var error: String?
+    @Published var credentialRequest: ConnectionCredentialRequest?
 
     let manager = DeviceManager()
     private weak var extensionContext: NSExtensionContext?
@@ -102,7 +103,7 @@ private final class ShareSendModel: ObservableObject {
         }
     }
 
-    func connectSelectedDevice() async {
+    func connectSelectedDevice(sessionValues: [String: String] = [:]) async {
         guard let device = manager.savedDevices.first(where: { $0.id == selectedDeviceID }) else {
             error = "请先在 Pico Manager 的设备页面添加设备"
             return
@@ -112,9 +113,13 @@ private final class ShareSendModel: ObservableObject {
         defer { isConnecting = false }
         do {
             if manager.isConnected { manager.disconnect() }
-            try await manager.connect(device)
+            try await manager.connect(device, sessionValues: sessionValues)
         } catch {
-            self.error = errorMessage(error)
+            if let request = manager.credentialRequest(for: error, device: device) {
+                credentialRequest = request
+            } else {
+                self.error = errorMessage(error)
+            }
         }
     }
 
@@ -222,6 +227,7 @@ private enum ShareImportError: LocalizedError {
 private struct ShareSendView: View {
     @ObservedObject var model: ShareSendModel
     @ObservedObject var manager: DeviceManager
+    @State private var credential = ""
 
     private var canUpload: Bool {
         manager.supports("files.upload") && !model.acceptableFiles.isEmpty && !manager.isMutating
@@ -302,7 +308,9 @@ private struct ShareSendView: View {
                                     .progressViewStyle(.linear)
                                     .accessibilityLabel("发送进度")
                                     .accessibilityValue("\(Int(Double(progress.sent) / Double(progress.total) * 100))%")
-                                Text("发送中 · \(ByteCountFormatter.string(fromByteCount: Int64(progress.sent), countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: Int64(progress.total), countStyle: .file))")
+                                Text(progress.sent >= progress.total
+                                     ? "等待设备确认…"
+                                     : "发送中 · \(ByteCountFormatter.string(fromByteCount: Int64(progress.sent), countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: Int64(progress.total), countStyle: .file))")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             } else {
@@ -331,6 +339,8 @@ private struct ShareSendView: View {
             .navigationTitle("推书")
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: model.selectedDeviceID) { _, selectedID in
+                model.credentialRequest = nil
+                credential = ""
                 if manager.activeDevice?.id != selectedID {
                     manager.disconnect()
                     model.selectedDirectory = nil
@@ -353,6 +363,25 @@ private struct ShareSendView: View {
             }
             .alert("发送完成", isPresented: $model.showingCompletion) {
                 Button("完成") { model.finish() }
+            }
+            .alert(model.credentialRequest?.rejected == true
+                ? "\(model.credentialRequest?.field.label ?? "凭据")无效"
+                : "需要\(model.credentialRequest?.field.label ?? "凭据")", isPresented: Binding(
+                get: { model.credentialRequest != nil },
+                set: { if !$0 { model.credentialRequest = nil; credential = "" } }
+            )) {
+                SecureField(model.credentialRequest?.field.label ?? "凭据", text: $credential)
+                Button("连接") {
+                    guard let request = model.credentialRequest else { return }
+                    let value = credential.trimmingCharacters(in: .whitespacesAndNewlines)
+                    credential = ""
+                    model.credentialRequest = nil
+                    Task { await model.connectSelectedDevice(sessionValues: [request.field.key: value]) }
+                }
+                .disabled(credential.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button("取消", role: .cancel) { credential = ""; model.credentialRequest = nil }
+            } message: {
+                Text("请输入设备当前显示的\(model.credentialRequest?.field.label ?? "凭据")")
             }
             .alert("无法继续", isPresented: Binding(
                 get: { model.error != nil },

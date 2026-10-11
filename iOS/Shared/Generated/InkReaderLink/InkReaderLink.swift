@@ -1988,14 +1988,16 @@ public struct SdkConnectionField: Equatable, Hashable {
     public var label: String
     public var kind: SdkConnectionFieldKind
     public var required: Bool
+    public var retention: SdkConnectionFieldRetention
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(key: String, label: String, kind: SdkConnectionFieldKind, required: Bool) {
+    public init(key: String, label: String, kind: SdkConnectionFieldKind, required: Bool, retention: SdkConnectionFieldRetention) {
         self.key = key
         self.label = label
         self.kind = kind
         self.required = required
+        self.retention = retention
     }
 
     
@@ -2017,7 +2019,8 @@ public struct FfiConverterTypeSdkConnectionField: FfiConverterRustBuffer {
                 key: FfiConverterString.read(from: &buf), 
                 label: FfiConverterString.read(from: &buf), 
                 kind: FfiConverterTypeSdkConnectionFieldKind.read(from: &buf), 
-                required: FfiConverterBool.read(from: &buf)
+                required: FfiConverterBool.read(from: &buf),
+                retention: FfiConverterTypeSdkConnectionFieldRetention.read(from: &buf)
         )
     }
 
@@ -2026,6 +2029,7 @@ public struct FfiConverterTypeSdkConnectionField: FfiConverterRustBuffer {
         FfiConverterString.write(value.label, into: &buf)
         FfiConverterTypeSdkConnectionFieldKind.write(value.kind, into: &buf)
         FfiConverterBool.write(value.required, into: &buf)
+        FfiConverterTypeSdkConnectionFieldRetention.write(value.retention, into: &buf)
     }
 }
 
@@ -3463,6 +3467,7 @@ public func FfiConverterTypeSdkConflictPolicy_lower(_ value: SdkConflictPolicy) 
 public enum SdkConnectionFieldKind: Equatable, Hashable {
     
     case text
+    case secret
     case address
     case choice(options: [String]
     )
@@ -3490,12 +3495,14 @@ public struct FfiConverterTypeSdkConnectionFieldKind: FfiConverterRustBuffer {
         
         case 1: return .text
         
-        case 2: return .address
+        case 2: return .secret
         
-        case 3: return .choice(options: try FfiConverterSequenceString.read(from: &buf)
+        case 3: return .address
+
+        case 4: return .choice(options: try FfiConverterSequenceString.read(from: &buf)
         )
         
-        case 4: return .toggle
+        case 5: return .toggle
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -3509,17 +3516,21 @@ public struct FfiConverterTypeSdkConnectionFieldKind: FfiConverterRustBuffer {
             writeInt(&buf, Int32(1))
         
         
-        case .address:
+        case .secret:
             writeInt(&buf, Int32(2))
         
         
-        case let .choice(options):
+        case .address:
             writeInt(&buf, Int32(3))
+
+
+        case let .choice(options):
+            writeInt(&buf, Int32(4))
             FfiConverterSequenceString.write(options, into: &buf)
             
         
         case .toggle:
-            writeInt(&buf, Int32(4))
+            writeInt(&buf, Int32(5))
         
         }
     }
@@ -3543,9 +3554,77 @@ public func FfiConverterTypeSdkConnectionFieldKind_lower(_ value: SdkConnectionF
 
 
 
+public enum SdkConnectionFieldRetention: Equatable, Hashable {
+
+    case appManaged
+    case session
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension SdkConnectionFieldRetention: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSdkConnectionFieldRetention: FfiConverterRustBuffer {
+    typealias SwiftType = SdkConnectionFieldRetention
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SdkConnectionFieldRetention {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .appManaged
+
+        case 2: return .session
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: SdkConnectionFieldRetention, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .appManaged:
+            writeInt(&buf, Int32(1))
+
+
+        case .session:
+            writeInt(&buf, Int32(2))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSdkConnectionFieldRetention_lift(_ buf: RustBuffer) throws -> SdkConnectionFieldRetention {
+    return try FfiConverterTypeSdkConnectionFieldRetention.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSdkConnectionFieldRetention_lower(_ value: SdkConnectionFieldRetention) -> RustBuffer {
+    return FfiConverterTypeSdkConnectionFieldRetention.lower(value)
+}
+
+
+
+
 public enum SdkConnectionValue: Equatable, Hashable {
     
     case text(value: String
+    )
+    case secret(value: String
     )
     case address(value: String
     )
@@ -3577,13 +3656,16 @@ public struct FfiConverterTypeSdkConnectionValue: FfiConverterRustBuffer {
         case 1: return .text(value: try FfiConverterString.read(from: &buf)
         )
         
-        case 2: return .address(value: try FfiConverterString.read(from: &buf)
+        case 2: return .secret(value: try FfiConverterString.read(from: &buf)
         )
         
-        case 3: return .choice(index: try FfiConverterUInt32.read(from: &buf)
+        case 3: return .address(value: try FfiConverterString.read(from: &buf)
         )
         
-        case 4: return .toggle(value: try FfiConverterBool.read(from: &buf)
+        case 4: return .choice(index: try FfiConverterUInt32.read(from: &buf)
+        )
+
+        case 5: return .toggle(value: try FfiConverterBool.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -3599,18 +3681,23 @@ public struct FfiConverterTypeSdkConnectionValue: FfiConverterRustBuffer {
             FfiConverterString.write(value, into: &buf)
             
         
-        case let .address(value):
+        case let .secret(value):
             writeInt(&buf, Int32(2))
             FfiConverterString.write(value, into: &buf)
             
         
-        case let .choice(index):
+        case let .address(value):
             writeInt(&buf, Int32(3))
+            FfiConverterString.write(value, into: &buf)
+
+
+        case let .choice(index):
+            writeInt(&buf, Int32(4))
             FfiConverterUInt32.write(index, into: &buf)
             
         
         case let .toggle(value):
-            writeInt(&buf, Int32(4))
+            writeInt(&buf, Int32(5))
             FfiConverterBool.write(value, into: &buf)
             
         }
@@ -3785,6 +3872,10 @@ enum SdkOperationError: Swift.Error, Equatable, Hashable, Foundation.LocalizedEr
     )
     case Unsupported(detail: String
     )
+    case CredentialRequired(key: String
+    )
+    case CredentialRejected(key: String
+    )
     case Unreachable
     case Timeout
     case Conflict(detail: String
@@ -3833,22 +3924,28 @@ public struct FfiConverterTypeSdkOperationError: FfiConverterRustBuffer {
         case 2: return .Unsupported(
             detail: try FfiConverterString.read(from: &buf)
             )
-        case 3: return .Unreachable
-        case 4: return .Timeout
-        case 5: return .Conflict(
+        case 3: return .CredentialRequired(
+            key: try FfiConverterString.read(from: &buf)
+            )
+        case 4: return .CredentialRejected(
+            key: try FfiConverterString.read(from: &buf)
+            )
+        case 5: return .Unreachable
+        case 6: return .Timeout
+        case 7: return .Conflict(
             detail: try FfiConverterString.read(from: &buf)
             )
-        case 6: return .InsufficientStorage
-        case 7: return .RemoteFailure(
+        case 8: return .InsufficientStorage
+        case 9: return .RemoteFailure(
             detail: try FfiConverterString.read(from: &buf)
             )
-        case 8: return .CommittedWithWarning(
+        case 10: return .CommittedWithWarning(
             detail: try FfiConverterString.read(from: &buf)
             )
-        case 9: return .CommittedButCleanupFailed(
+        case 11: return .CommittedButCleanupFailed(
             detail: try FfiConverterString.read(from: &buf)
             )
-        case 10: return .RecoveryFailed(
+        case 12: return .RecoveryFailed(
             detail: try FfiConverterString.read(from: &buf)
             )
 
@@ -3873,40 +3970,50 @@ public struct FfiConverterTypeSdkOperationError: FfiConverterRustBuffer {
             FfiConverterString.write(detail, into: &buf)
             
         
-        case .Unreachable:
+        case let .CredentialRequired(key):
             writeInt(&buf, Int32(3))
+            FfiConverterString.write(key, into: &buf)
+
+
+        case let .CredentialRejected(key):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(key, into: &buf)
+
+
+        case .Unreachable:
+            writeInt(&buf, Int32(5))
         
         
         case .Timeout:
-            writeInt(&buf, Int32(4))
-        
-        
-        case let .Conflict(detail):
-            writeInt(&buf, Int32(5))
-            FfiConverterString.write(detail, into: &buf)
-            
-        
-        case .InsufficientStorage:
             writeInt(&buf, Int32(6))
         
         
-        case let .RemoteFailure(detail):
+        case let .Conflict(detail):
             writeInt(&buf, Int32(7))
             FfiConverterString.write(detail, into: &buf)
             
         
-        case let .CommittedWithWarning(detail):
+        case .InsufficientStorage:
             writeInt(&buf, Int32(8))
-            FfiConverterString.write(detail, into: &buf)
-            
         
-        case let .CommittedButCleanupFailed(detail):
+        
+        case let .RemoteFailure(detail):
             writeInt(&buf, Int32(9))
             FfiConverterString.write(detail, into: &buf)
             
         
-        case let .RecoveryFailed(detail):
+        case let .CommittedWithWarning(detail):
             writeInt(&buf, Int32(10))
+            FfiConverterString.write(detail, into: &buf)
+            
+        
+        case let .CommittedButCleanupFailed(detail):
+            writeInt(&buf, Int32(11))
+            FfiConverterString.write(detail, into: &buf)
+            
+        
+        case let .RecoveryFailed(detail):
+            writeInt(&buf, Int32(12))
             FfiConverterString.write(detail, into: &buf)
             
         }

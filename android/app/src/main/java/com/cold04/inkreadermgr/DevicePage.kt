@@ -61,7 +61,11 @@ import com.cold04.inkreadermgr.ui.theme.PicoManageTheme
 import kotlinx.coroutines.launch
 import uniffi.inkreaderlink_uniffi.SdkConnectionField
 import uniffi.inkreaderlink_uniffi.SdkConnectionFieldKind
+import uniffi.inkreaderlink_uniffi.SdkConnectionFieldRetention
 import uniffi.inkreaderlink_uniffi.SdkOperationException
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import java.util.concurrent.atomic.AtomicLong
 
 class DeviceConnectionActivity : ComponentActivity() {
     companion object {
@@ -94,6 +98,7 @@ fun DevicePage(onBack: () -> Unit) {
     var operationFailure by remember { mutableStateOf<String?>(null) }
     var connectionFailure by remember { mutableStateOf<Pair<SavedDevice, Exception>?>(null) }
     var deleting by remember { mutableStateOf<SavedDevice?>(null) }
+    var sessionSecretPrompt by remember { mutableStateOf<SessionSecretPrompt?>(null) }
 
     fun openEditor(saved: SavedDevice? = null) {
         context.startActivity(
@@ -108,7 +113,7 @@ fun DevicePage(onBack: () -> Unit) {
         connectingId = saved.id
         scope.launch {
             try {
-                DeviceSessions.connect(saved.id)
+                connectWithSessionCredentials(saved) { sessionSecretPrompt = it }
             } catch (cause: Exception) {
                 connectionFailure = saved to cause
             } finally {
@@ -234,6 +239,10 @@ fun DevicePage(onBack: () -> Unit) {
     }
 
     OperationErrorDialog(message = operationFailure, onDismiss = { operationFailure = null })
+    SessionSecretDialog(
+        prompt = sessionSecretPrompt,
+        onResult = { sessionSecretPrompt?.complete(it) },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -252,6 +261,7 @@ private fun DeviceConnectionPage(existingId: String?, onBack: () -> Unit) {
     var typeMenuExpanded by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var sessionSecretPrompt by remember { mutableStateOf<SessionSecretPrompt?>(null) }
     val definition = devices.firstOrNull { it.deviceType == deviceType }
 
     fun linkDevice() {
@@ -275,7 +285,7 @@ private fun DeviceConnectionPage(existingId: String?, onBack: () -> Unit) {
                 } else {
                     DeviceSessions.update(existingId, deviceType, configuredValues)
                 }
-                DeviceSessions.connect(saved.id)
+                if (connectWithSessionCredentials(saved) { sessionSecretPrompt = it } == null) return@launch
                 onBack()
             } catch (cause: Exception) {
                 error = connectionError(cause)
@@ -355,6 +365,10 @@ private fun DeviceConnectionPage(existingId: String?, onBack: () -> Unit) {
     }
 
     OperationErrorDialog(error, onDismiss = { error = null }, title = "设备连接失败")
+    SessionSecretDialog(
+        prompt = sessionSecretPrompt,
+        onResult = { sessionSecretPrompt?.complete(it) },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -438,18 +452,138 @@ private fun ConnectionFieldEditor(
                 },
             )
         }
+        SdkConnectionFieldKind.Secret -> Unit
     }
 }
 
-private fun connectionError(cause: Throwable): String = when (cause) {
-    is SdkOperationException.InvalidArgument -> "连接参数无效：${cause.detail}"
-    is SdkOperationException.Unsupported -> "当前 SDK 不支持该设备"
-    is SdkOperationException.Unreachable -> "无法连接设备，请检查地址和网络"
-    is SdkOperationException.Timeout -> "连接超时，请确认设备处于传书模式"
-    is SdkOperationException.RemoteFailure -> "设备响应异常，请重试"
-    is IllegalArgumentException -> cause.message ?: "输入无效"
-    else -> cause.message?.takeIf(String::isNotBlank) ?: "连接失败，请重试"
+private suspend fun connectWithSessionCredentials(
+    saved: SavedDevice,
+    updatePrompt: (SessionSecretPrompt?) -> Unit,
+): ActiveDevice? {
+    var credentials = emptyMap<String, String>()
+    var rejectedCredential = false
+    val fields = DeviceSessions.supportedDevices()
+        .firstOrNull { it.deviceType == saved.deviceType }
+        ?.connectionFields
+        .orEmpty()
+
+    while (true) {
+        try {
+            return DeviceSessions.connect(saved.id, credentials)
+        } catch (cause: Exception) {
+            val sdkError = generateSequence<Throwable>(cause) { it.cause }
+                .filterIsInstance<SdkOperationException>()
+                .firstOrNull()
+            val key = when (sdkError) {
+                is SdkOperationException.CredentialRequired -> {
+                    rejectedCredential = false
+                    sdkError.key
+                }
+                is SdkOperationException.CredentialRejected -> {
+                    rejectedCredential = true
+                    sdkError.key
+                }
+                else -> throw cause
+            }
+            val field = fields.firstOrNull {
+                it.key == key && it.kind == SdkConnectionFieldKind.Secret &&
+                    it.retention == SdkConnectionFieldRetention.SESSION
+            } ?: throw cause
+            val value = requestSessionSecret(field.label, rejectedCredential, updatePrompt) ?: return null
+            credentials = credentials + (key to value)
+        }
+    }
 }
 
-private fun connectionErrorTitle(cause: Exception): String =
-    if (cause is SdkOperationException.Timeout) "连接超时" else "连接失败"
+private data class SessionSecretPrompt(
+    val id: Long,
+    val fieldLabel: String,
+    val rejected: Boolean,
+    val complete: (String?) -> Unit,
+)
+
+@Composable
+private fun SessionSecretDialog(
+    prompt: SessionSecretPrompt?,
+    onResult: (String?) -> Unit,
+) {
+    var value by rememberSaveable(prompt?.id) { mutableStateOf("") }
+    prompt ?: return
+
+    AlertDialog(
+        onDismissRequest = { onResult(null) },
+        title = { Text(if (prompt.rejected) "访问码无效" else "需要设备访问码") },
+        text = {
+            Column {
+                Text(if (prompt.rejected) "请检查设备上显示的临时访问码并重试。" else "请输入设备当前显示的临时访问码。")
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    label = { Text(prompt.fieldLabel) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onResult(value.trim()) }, enabled = value.isNotBlank()) {
+                Text("连接")
+            }
+        },
+        dismissButton = { TextButton(onClick = { onResult(null) }) { Text("取消") } },
+    )
+}
+
+private suspend fun requestSessionSecret(
+    fieldLabel: String,
+    rejected: Boolean,
+    updatePrompt: (SessionSecretPrompt?) -> Unit,
+): String? = suspendCancellableCoroutine { continuation ->
+    val prompt = SessionSecretPrompt(
+        id = sessionSecretPromptIds.incrementAndGet(),
+        fieldLabel = fieldLabel,
+        rejected = rejected,
+    ) { value ->
+        if (continuation.isActive) continuation.resume(value)
+        updatePrompt(null)
+    }
+    continuation.invokeOnCancellation { updatePrompt(null) }
+    updatePrompt(prompt)
+}
+
+private val sessionSecretPromptIds = AtomicLong()
+
+internal fun connectionError(cause: Throwable): String {
+    val sdkError = generateSequence(cause) { it.cause }
+        .filterIsInstance<SdkOperationException>()
+        .firstOrNull()
+    return when (sdkError) {
+        is SdkOperationException.CredentialRequired -> "设备要求输入访问凭据：${sdkError.key}"
+        is SdkOperationException.CredentialRejected -> "设备拒绝了访问凭据：${sdkError.key}"
+        is SdkOperationException.InvalidArgument -> sdkError.detail
+        is SdkOperationException.Unsupported -> sdkError.detail
+        is SdkOperationException.Conflict -> sdkError.detail
+        is SdkOperationException.RemoteFailure -> sdkError.detail
+        is SdkOperationException.CommittedWithWarning -> sdkError.detail
+        is SdkOperationException.CommittedButCleanupFailed -> sdkError.detail
+        is SdkOperationException.RecoveryFailed -> sdkError.detail
+        is SdkOperationException.Unreachable -> "无法连接设备，请检查地址和网络"
+        is SdkOperationException.Timeout -> "连接超时，请确认设备处于传书模式"
+        is SdkOperationException.InsufficientStorage -> "设备存储空间不足"
+        null -> when (cause) {
+            is IllegalArgumentException -> cause.message ?: "输入无效"
+            else -> cause.message?.takeIf(String::isNotBlank)
+                ?: generateSequence(cause.cause) { it.cause }
+                    .mapNotNull { it.message?.takeIf(String::isNotBlank) }
+                    .firstOrNull()
+                ?: "连接失败，请重试"
+        }
+    }
+}
+
+private fun connectionErrorTitle(cause: Exception): String {
+    val sdkError = generateSequence<Throwable>(cause) { it.cause }
+        .filterIsInstance<SdkOperationException>()
+        .firstOrNull()
+    return if (sdkError is SdkOperationException.Timeout) "连接超时" else "连接失败"
+}

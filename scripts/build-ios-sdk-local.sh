@@ -16,6 +16,8 @@ if ! command -v uniffi-bindgen >/dev/null 2>&1; then
   exit 1
 fi
 
+export IPHONEOS_DEPLOYMENT_TARGET="${IPHONEOS_DEPLOYMENT_TARGET:-17.0}"
+
 cargo build --locked --release -p inkreaderlink-uniffi --manifest-path "$SDK_ROOT/Cargo.toml"
 cargo build --locked --release -p inkreaderlink-uniffi --target aarch64-apple-ios --manifest-path "$SDK_ROOT/Cargo.toml"
 cargo build --locked --release -p inkreaderlink-uniffi --target aarch64-apple-ios-sim --manifest-path "$SDK_ROOT/Cargo.toml"
