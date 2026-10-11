@@ -34,6 +34,7 @@ import uniffi.inkreaderlink_uniffi.SdkSettingsSnapshot
 import uniffi.inkreaderlink_uniffi.SdkSettingChange
 import uniffi.inkreaderlink_uniffi.BooksendSdk
 import uniffi.inkreaderlink_uniffi.SdkConnectionFieldKind
+import uniffi.inkreaderlink_uniffi.SdkConnectionFieldRetention
 import uniffi.inkreaderlink_uniffi.SdkConnectionParameter
 import uniffi.inkreaderlink_uniffi.SdkConnectionValue
 import uniffi.inkreaderlink_uniffi.SdkSupportedDevice
@@ -128,7 +129,10 @@ object DeviceSessions {
         }
     }
 
-    suspend fun connect(id: String): ActiveDevice = withContext(Dispatchers.IO) {
+    suspend fun connect(
+        id: String,
+        sessionCredentials: Map<String, String> = emptyMap(),
+    ): ActiveDevice = withContext(Dispatchers.IO) {
         mutex.withLock {
             val saved = mutableState.value.saved.firstOrNull { it.id == id }
                 ?: throw IllegalArgumentException("设备不存在")
@@ -141,12 +145,20 @@ object DeviceSessions {
 
             val definition = supportedDevices.firstOrNull { it.deviceType == saved.deviceType }
                 ?: throw IllegalArgumentException("SDK 未声明此设备类型")
+            require(sessionCredentials.all { (key, value) ->
+                value.isNotBlank() && definition.connectionFields.any { field ->
+                    field.key == key && field.kind == SdkConnectionFieldKind.Secret &&
+                        field.retention == SdkConnectionFieldRetention.SESSION
+                }
+            }) { "会话凭据必须对应 SDK 声明的临时密钥字段" }
             val parameters = definition.connectionFields.mapNotNull { field ->
-                val value = saved.connectionValues[field.key]
+                val value = sessionCredentials[field.key]
+                    ?: saved.connectionValues[field.key]
                     ?: (if (field.kind == SdkConnectionFieldKind.Toggle) "false" else null)
                     ?: return@mapNotNull null
                 val typedValue = when (val kind = field.kind) {
                     SdkConnectionFieldKind.Text -> SdkConnectionValue.Text(value)
+                    SdkConnectionFieldKind.Secret -> SdkConnectionValue.Secret(value)
                     SdkConnectionFieldKind.Address -> SdkConnectionValue.Address(value)
                     is SdkConnectionFieldKind.Choice -> SdkConnectionValue.Choice(
                         value.toUIntOrNull() ?: throw IllegalArgumentException("请选择${field.label}"),
@@ -485,6 +497,8 @@ object DeviceSessions {
             is SdkOperationException.Timeout -> "设备响应超时，请稍后重试"
             is SdkOperationException.InvalidArgument -> "输入无效：${sdkError.detail}"
             is SdkOperationException.Unsupported -> "设备不支持此操作：${sdkError.detail}"
+            is SdkOperationException.CredentialRequired -> "设备要求输入访问凭据：${sdkError.key}"
+            is SdkOperationException.CredentialRejected -> "设备拒绝了访问凭据：${sdkError.key}"
             is SdkOperationException.RemoteFailure -> "设备操作失败：${sdkError.detail}"
             is SdkOperationException.Conflict -> "设备内容已变化，请刷新后重试：${sdkError.detail}"
             is SdkOperationException.InsufficientStorage -> "设备存储空间不足"
@@ -502,6 +516,8 @@ object DeviceSessions {
         return when (sdkError) {
             is SdkOperationException.InvalidArgument -> "上传参数无效：${sdkError.detail}"
             is SdkOperationException.Unsupported -> "设备不支持此上传方式：${sdkError.detail}"
+            is SdkOperationException.CredentialRequired -> "设备要求输入访问凭据：${sdkError.key}"
+            is SdkOperationException.CredentialRejected -> "设备拒绝了访问凭据：${sdkError.key}"
             is SdkOperationException.Unreachable -> "设备无法访问，请检查设备连接和网络"
             is SdkOperationException.Timeout -> "上传超时，请检查设备连接后重试"
             is SdkOperationException.Conflict -> "设备中已存在同名文件：${sdkError.detail}"
@@ -577,7 +593,8 @@ object DeviceSessions {
                 SdkConnectionFieldKind.Toggle -> value?.let {
                     require(it.toBooleanStrictOrNull() != null) { "${field.label}的值无效" }
                 }
-                SdkConnectionFieldKind.Text, SdkConnectionFieldKind.Address -> Unit
+                SdkConnectionFieldKind.Text, SdkConnectionFieldKind.Address,
+                SdkConnectionFieldKind.Secret -> Unit
             }
         }
         return normalized
