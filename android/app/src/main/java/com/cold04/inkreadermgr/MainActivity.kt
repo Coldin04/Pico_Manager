@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material.icons.filled.FontDownload
 import androidx.compose.material.icons.filled.RssFeed
 import androidx.compose.material.icons.filled.Settings
@@ -101,15 +100,6 @@ class MainActivity : ComponentActivity() {
                     onOpdsClick = { startActivity(Intent(this, OpdsManagementActivity::class.java)) },
                     onSoftwareSettingsClick = { startActivity(Intent(this, SoftwareSettingsActivity::class.java)) },
                     onWallpapersClick = { startActivity(Intent(this, WallpaperManagementActivity::class.java)) },
-                    onFirmwareClick = { file ->
-                        startActivity(Intent(this, FirmwareUpdateActivity::class.java).apply {
-                            if (file != null) {
-                                data = file.uri
-                                putExtra(FirmwareUpdateActivity.EXTRA_FILE_NAME, file.name)
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            }
-                        })
-                    },
                 )
             }
         }
@@ -183,15 +173,6 @@ class ShareActivity : ComponentActivity() {
                     SendPage(
                         activeDevice = devices.active,
                         onDevicesClick = { startActivity(Intent(this, DeviceActivity::class.java)) },
-                        onFirmwareClick = { file ->
-                            startActivity(Intent(this, FirmwareUpdateActivity::class.java).apply {
-                                if (file != null) {
-                                    data = file.uri
-                                    putExtra(FirmwareUpdateActivity.EXTRA_FILE_NAME, file.name)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                            })
-                        },
                         incomingEvent = incomingEvent,
                         onIncomingFilesConsumed = incomingFiles::consume,
                         modifier = Modifier.padding(insets),
@@ -231,11 +212,7 @@ private enum class MainDestination(val label: String) {
 private enum class SendFileCategory(val label: String) {
     BOOK("图书"),
     FONT("字体"),
-    FIRMWARE("固件"),
 }
-
-private fun BookUploadFile.isBinFirmwareCandidate(): Boolean =
-    name.substringAfterLast('.', "").lowercase(Locale.ROOT) == "bin"
 
 @Composable
 private fun MainShell(
@@ -248,7 +225,6 @@ private fun MainShell(
     onOpdsClick: () -> Unit,
     onSoftwareSettingsClick: () -> Unit,
     onWallpapersClick: () -> Unit,
-    onFirmwareClick: (BookUploadFile?) -> Unit,
 ) {
     val destinations = MainDestination.entries
     val pagerState = rememberPagerState(pageCount = { destinations.size })
@@ -277,7 +253,7 @@ private fun MainShell(
                 onDevicesClick = onDevicesClick,
             ) {
                 when (destination) {
-                    MainDestination.SEND -> SendPage(activeDevice, onDevicesClick, onFirmwareClick)
+                    MainDestination.SEND -> SendPage(activeDevice, onDevicesClick)
                     MainDestination.FILES -> FileManagementPage(
                         connectedDeviceCount = connectedDeviceCount,
                         onDevicesClick = onDevicesClick,
@@ -293,7 +269,6 @@ private fun MainShell(
                         onOpdsClick = onOpdsClick,
                         onSoftwareSettingsClick = onSoftwareSettingsClick,
                         onWallpapersClick = onWallpapersClick,
-                        onFirmwareClick = { onFirmwareClick(null) },
                     )
                 }
             }
@@ -397,7 +372,6 @@ private fun MainNavigation(
 internal fun SendPage(
     activeDevice: ActiveDevice?,
     onDevicesClick: () -> Unit,
-    onFirmwareClick: (BookUploadFile?) -> Unit,
     incomingEvent: IncomingFilesEvent<List<BookUploadFile>>? = null,
     onIncomingFilesConsumed: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -447,7 +421,6 @@ internal fun SendPage(
             selectedFiles = incomingFiles
             val extension = incomingFiles.singleOrNull()?.name?.substringAfterLast('.', "")?.lowercase(Locale.ROOT)
             category = when {
-                incomingFiles.size == 1 && incomingFiles.single().isBinFirmwareCandidate() -> SendFileCategory.FIRMWARE
                 incomingFiles.size == 1 && canUploadFonts && extension in fontExtensions -> SendFileCategory.FONT
                 else -> SendFileCategory.BOOK
             }
@@ -501,13 +474,11 @@ internal fun SendPage(
             selectedFiles = files
             val extension = files.singleOrNull()?.name?.substringAfterLast('.', "")?.lowercase(Locale.ROOT)
             category = when {
-                files.size == 1 && files.single().isBinFirmwareCandidate() -> SendFileCategory.FIRMWARE
                 files.size == 1 && canUploadFonts && extension in fontExtensions -> SendFileCategory.FONT
                 else -> SendFileCategory.BOOK
             }
         }
     }
-    val firmwareCandidate = selectedFiles.size == 1 && selectedFiles.single().isBinFirmwareCandidate()
     val fontCandidate = selectedFiles.size == 1 && canUploadFonts &&
         selectedFiles.single().name.substringAfterLast('.', "").lowercase(Locale.ROOT) in fontExtensions
     val unreadableCount = selectedFiles.count { file ->
@@ -526,15 +497,13 @@ internal fun SendPage(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
-            if (category != SendFileCategory.FIRMWARE) {
-                SendSelectionContent(
-                    icon = Icons.Default.Smartphone,
-                    title = "设备",
-                    value = activeDevice?.saved?.let { DeviceSessions.addressFor(it) } ?: "连接设备",
-                    modifier = Modifier.fillMaxWidth().clickable(onClick = onDevicesClick).padding(16.dp),
-                )
-                Spacer(Modifier.height(20.dp))
-            }
+            SendSelectionContent(
+                icon = Icons.Default.Smartphone,
+                title = "设备",
+                value = activeDevice?.saved?.let { DeviceSessions.addressFor(it) } ?: "连接设备",
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onDevicesClick).padding(16.dp),
+            )
+            Spacer(Modifier.height(20.dp))
                 SendSelectionContent(
                     icon = Icons.Default.Description,
                     title = "选择发送的文件",
@@ -553,7 +522,6 @@ internal fun SendPage(
                     val categories = buildList {
                         add(SendFileCategory.BOOK)
                         if (canUploadFonts) add(SendFileCategory.FONT)
-                        add(SendFileCategory.FIRMWARE)
                     }
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                         categories.forEachIndexed { index, choice ->
@@ -563,7 +531,6 @@ internal fun SendPage(
                                 enabled = !fontUploadRunning && when (choice) {
                                     SendFileCategory.BOOK -> true
                                     SendFileCategory.FONT -> true
-                                    SendFileCategory.FIRMWARE -> true
                                 },
                                 shape = SegmentedButtonDefaults.itemShape(index, categories.size),
                                 label = { Text(choice.label) },
@@ -634,7 +601,7 @@ internal fun SendPage(
                     else -> "正在上传字体 · ${(progress.first.toDouble() * 100 / progress.second.toDouble()).toInt()}%"
                 }
                 Text(progressLabel, modifier = Modifier.padding(bottom = 8.dp), style = MaterialTheme.typography.bodyMedium)
-            } else if (category != SendFileCategory.FIRMWARE || uploadProgress.running) {
+            } else {
                 BookUploadStatus(Modifier.fillMaxWidth().padding(bottom = 8.dp))
             }
             Button(
@@ -652,24 +619,17 @@ internal fun SendPage(
                             val selected = selectedFiles.singleOrNull() ?: return@Button
                             uploadFont(selected, overwrite = false)
                         }
-                        SendFileCategory.FIRMWARE -> selectedFiles.singleOrNull()?.let { onFirmwareClick(it) }
                     }
                 },
                 enabled = selectedFiles.isNotEmpty() && !uploadProgress.running && !fontUploadRunning && when (category) {
                     SendFileCategory.BOOK -> activeDevice?.profile?.capabilities?.contains("files.upload") == true
                     SendFileCategory.FONT -> fontCandidate && (!fontFamilyRequired || fontFamilyName.isNotBlank())
-                    SendFileCategory.FIRMWARE -> selectedFiles.size == 1
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Icon(
-                    if (category == SendFileCategory.FIRMWARE) Icons.Default.SystemUpdateAlt
-                    else Icons.AutoMirrored.Filled.Send,
-                    contentDescription = null,
-                )
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
                 Text(when (category) {
-                    SendFileCategory.FIRMWARE -> "前往刷机"
                     SendFileCategory.FONT -> "上传字体"
                     SendFileCategory.BOOK -> "发送"
                 })
@@ -762,7 +722,6 @@ private fun FeatureListPage(
     onOpdsClick: () -> Unit,
     onSoftwareSettingsClick: () -> Unit,
     onWallpapersClick: () -> Unit,
-    onFirmwareClick: () -> Unit,
 ) {
     val entries = listOf(
         FeatureEntry(
@@ -799,13 +758,6 @@ private fun FeatureListPage(
             requiredCapabilities = setOf("device.info"),
             icon = { Icon(Icons.Default.Info, contentDescription = null) },
             onClick = onDeviceInfoClick,
-        ),
-        FeatureEntry(
-            title = "设备刷机",
-            description = "刷写设备固件",
-            availableWithoutDevice = true,
-            icon = { Icon(Icons.Default.SystemUpdateAlt, contentDescription = null) },
-            onClick = onFirmwareClick,
         ),
         FeatureEntry(
             title = "壁纸管理",
@@ -850,41 +802,6 @@ class WifiManagementActivity : ComponentActivity() {
     }
 }
 
-class FirmwareUpdateActivity : ComponentActivity() {
-    companion object {
-        const val EXTRA_FILE_NAME = "firmware_file_name"
-    }
-
-    @OptIn(ExperimentalMaterial3Api::class)
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            PicoManageTheme {
-                androidx.compose.material3.Scaffold(
-                    topBar = {
-                        TopAppBar(
-                            title = { Text("设备刷机") },
-                            navigationIcon = {
-                                IconButton(onClick = ::finish) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                                }
-                            },
-                        )
-                    },
-                ) { innerPadding ->
-                    Box(
-                        Modifier.fillMaxSize().padding(innerPadding),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("刷机功能适配中，敬请期待", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-        }
-    }
-}
-
 @Preview(showBackground = true)
 @Composable
 private fun PicoManagerPreview() {
@@ -899,7 +816,6 @@ private fun PicoManagerPreview() {
             onOpdsClick = {},
             onSoftwareSettingsClick = {},
             onWallpapersClick = {},
-            onFirmwareClick = { _ -> },
         )
     }
 }

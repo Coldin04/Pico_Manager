@@ -59,9 +59,6 @@
             android:name=".UploadDirectoryActivity"
             android:exported="false" />
         <activity
-            android:name=".FirmwareUpdateActivity"
-            android:exported="false" />
-        <activity
             android:name=".SoftwareSettingsActivity"
             android:exported="false" />
         <activity
@@ -106,13 +103,6 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="content" android:mimeType="*/*" android:pathPattern=".*\\.mobi" />
                 <data android:scheme="file" android:mimeType="*/*" android:pathPattern=".*\\.mobi" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" android:mimeType="*/*" android:pathPattern=".*\\.bin" />
-                <data android:scheme="file" android:mimeType="*/*" android:pathPattern=".*\\.bin" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
