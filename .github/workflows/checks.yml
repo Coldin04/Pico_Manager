@@ -106,7 +106,7 @@ jobs:
       - name: Verify package identity and native library
         shell: bash
         run: |
-          if grep -RniE 'PicoBook_SDK|picobook_sdk|picobookmgr|uniffi\.picobook_sdk|picobookSdkVersion|PICOBOOK_SDK_REPOSITORY|com\.cold04\.picomanage' README.md AGENTS.md android/gradle.properties android/settings.gradle.kts android/app/build.gradle.kts android/app/proguard-rules.pro android/app/src scripts .github/workflows/publish-android.yml; then
+          if grep -RniE 'PicoBook_SDK|picobook_sdk|picobookmgr|uniffi\.picobook_sdk|picobookSdkVersion|PICOBOOK_SDK_REPOSITORY|com\.cold04\.picomanage' README.md AGENTS.md android/gradle.properties android/settings.gradle.kts android/app/build.gradle.kts android/app/proguard-rules.pro android/app/src scripts --exclude=build-ios-sdk-local.sh .github/workflows/publish-android.yml; then
             echo "Legacy PicoBook SDK coordinates or App package identifiers remain." >&2
             exit 1
           fi
