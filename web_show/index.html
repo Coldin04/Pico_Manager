@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pico Manager — 专注阅读，轻松管理</title>
+  <meta name="description" content="Pico Manager 是一款支持多种固件的墨水屏管理应用，提供无线推书、文件管理、字体与壁纸配置等功能。" />
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --surface: #ffffff;
+      --text: #18181b;
+      --muted: #666560;
+      --border: #e6e4dd;
+      --btn-bg: #18181b;
+      --btn-text: #faf9f5;
+      --btn-hover: #323236;
+      --btn-sec-bg: transparent;
+      --btn-sec-hover: #f0eee8;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111113;
+        --surface: #18181b;
+        --text: #f4f4f0;
+        --muted: #989892;
+        --border: #27272a;
+        --btn-bg: #f4f4f0;
+        --btn-text: #111113;
+        --btn-hover: #dcdcd6;
+        --btn-sec-bg: transparent;
+        --btn-sec-hover: #1e1e22;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 3.5rem 1.5rem;
+    }
+
+    main {
+      width: 100%;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    .header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.875rem;
+    }
+
+    .logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+      flex-shrink: 0;
+    }
+
+    .logo svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .github-repo-link {
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      transition: color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .github-repo-link:hover {
+      color: var(--text);
+      background-color: var(--btn-sec-hover);
+    }
+
+    .github-repo-link svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .lead {
+      font-size: 1rem;
+      color: var(--muted);
+      margin-bottom: 1.75rem;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.65rem;
+    }
+
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background-color: var(--btn-bg);
+      color: var(--btn-text);
+      text-decoration: none;
+      font-size: 0.925rem;
+      font-weight: 500;
+      padding: 0.65rem 1.25rem;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      transition: background-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .download-btn:hover {
+      background-color: var(--btn-hover);
+    }
+
+    .download-btn:active {
+      transform: translateY(1px);
+    }
+
+    .download-btn.secondary {
+      background-color: var(--btn-sec-bg);
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    .download-btn.secondary:hover {
+      background-color: var(--btn-sec-hover);
+    }
+
+    .meta-note {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+
+    .features {
+      list-style: none;
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .features > li {
+      font-size: 0.925rem;
+      color: var(--muted);
+    }
+
+    .features strong {
+      color: var(--text);
+      font-weight: 500;
+      margin-right: 0.4rem;
+    }
+
+    .firmware-list {
+      margin-top: 0.35rem;
+      padding-left: 1.25rem;
+      font-size: 0.875rem;
+      color: var(--muted);
+      display: grid;
+      gap: 0.15rem;
+    }
+
+    .firmware-list a {
+      color: var(--text);
+      text-decoration: none;
+      border-bottom: 1px solid var(--border);
+      transition: border-color 0.15s ease;
+    }
+
+    .firmware-list a:hover {
+      border-color: var(--text);
+    }
+
+    footer {
+      margin-top: 2.75rem;
+      font-size: 0.775rem;
+      color: var(--muted);
+    }
+
+    footer a {
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="header-bar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path fill="currentColor" d="M22 2s-7.64-.37-13.66 7.88C3.72 16.21 2 22 2 22l1.94-1c1.44-2.5 2.19-3.53 3.6-5c2.53.74 5.17.65 7.46-2c-2-.56-3.6-.43-5.96-.19C11.69 12 13.5 11.6 16 12l1-2c-1.8-.34-3-.37-4.78.04C14.19 8.65 15.56 7.87 18 8l1.21-1.93c-1.56-.11-2.5.06-4.29.5c1.61-1.46 3.08-2.12 5.22-2.25c0 0 1.05-1.89 1.86-2.32" />
+          </svg>
+        </div>
+        <h1>Pico Manager</h1>
+      </div>
+
+      <a class="github-repo-link" href="https://github.com/Coldin04/Pico_Manager" target="_blank" rel="noopener noreferrer" aria-label="GitHub 仓库" title="GitHub 仓库">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0.296997C5.37 0.296997 0 5.67 0 12.297C0 17.6 3.438 22.097 8.205 23.682C8.805 23.795 9.025 23.424 9.025 23.105C9.025 22.82 9.015 22.065 9.01 21.065C5.672 21.789 4.968 19.455 4.968 19.455C4.422 18.07 3.633 17.7 3.633 17.7C2.546 16.956 3.717 16.971 3.717 16.971C4.922 17.055 5.555 18.207 5.555 18.207C6.625 20.042 8.364 19.512 9.05 19.205C9.158 18.429 9.467 17.9 9.81 17.6C7.145 17.3 4.344 16.268 4.344 11.67C4.344 10.36 4.809 9.29 5.579 8.45C5.444 8.147 5.039 6.927 5.684 5.274C5.684 5.274 6.689 4.952 8.984 6.504C9.944 6.237 10.964 6.105 11.984 6.099C13.004 6.105 14.024 6.237 14.984 6.504C17.264 4.952 18.269 5.274 18.269 5.274C18.914 6.927 18.509 8.147 18.389 8.45C19.154 9.29 19.619 10.36 19.619 11.67C19.619 16.28 16.814 17.295 14.144 17.59C14.564 17.95 14.954 18.686 14.954 19.81C14.954 21.416 14.939 22.706 14.939 23.096C14.939 23.411 15.149 23.786 15.764 23.666C20.565 22.092 24 17.592 24 12.297C24 5.67 18.627 0.296997 12 0.296997Z" />
+        </svg>
+      </a>
+    </div>
+
+    <p class="lead">
+      专注阅读，轻松管理。面向小尺寸墨水屏设备的原生管理工具，由 InkReaderLink 驱动，界面随设备与固件能力自动适配。
+    </p>
+
+    <div class="actions">
+      <a class="download-btn" href="https://gitee.com/coldin04/Pico_Manager/releases/" target="_blank" rel="noopener noreferrer">
+        <span>Gitee 下载</span>
+        <span aria-hidden="true">→</span>
+      </a>
+      <a class="download-btn secondary" href="https://github.com/Coldin04/Pico_Manager/releases" target="_blank" rel="noopener noreferrer">
+        <span>GitHub 下载</span>
+        <span aria-hidden="true">↗</span>
+      </a>
+    </div>
+    <span class="meta-note">支持 Android (APK) · iOS (IPA 自签)</span>
+
+    <ul class="features">
+      <li><strong>无线推书</strong>扫码或输入地址快速连接，支持从系统分享导入图书与字体，自动校验设备支持格式并选择目标目录。</li>
+      <li><strong>文件管理</strong>浏览阅读器存储目录，支持文件上传、下载、新建文件夹、移动、重命名与批量删除。</li>
+      <li><strong>设备配置</strong>按固件能力动态提供 Wi-Fi 网络管理、字体管理、壁纸上传与管理、OPDS 书源配置及设备参数调节。</li>
+      <li>
+        <strong>已适配固件</strong>
+        <ul class="firmware-list">
+          <li><a href="https://github.com/MindReset/read_pico_firmware" target="_blank" rel="noopener noreferrer">Read Pico 官方固件</a></li>
+          <li><a href="https://github.com/crosspoint-reader/crosspoint-reader" target="_blank" rel="noopener noreferrer">CrossPoint</a></li>
+          <li><a href="https://github.com/0x1abin/crossmux" target="_blank" rel="noopener noreferrer">CrossMux</a>（使用 CrossPoint 适配器）</li>
+          <li><a href="http://chinoryunqin.github.io/RickyOS-site" target="_blank" rel="noopener noreferrer">RickyOS</a>（使用 CrossPoint 适配器）</li>
+          <li><a href="https://github.com/wegooo-cell/read-pico-reader" target="_blank" rel="noopener noreferrer">KiikoRead</a></li>
+          <li><a href="https://446599.github.io/whiteos/" target="_blank" rel="noopener noreferrer">WhiteOS</a></li>
+          <li><a href="https://flasher.smn.icu/" target="_blank" rel="noopener noreferrer">JustRead</a></li>
+        </ul>
+      </li>
+    </ul>
+
+    <footer>
+      <span>© 2026 <a href="https://cold04.com" target="_blank" rel="noopener noreferrer">Coldin04</a> · GPLv3</span>
+    </footer>
+  </main>
+</body>
+</html>
