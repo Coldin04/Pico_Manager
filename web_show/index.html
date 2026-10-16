@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pico Manager — 专注阅读，轻松管理</title>
   <meta name="description" content="Pico Manager 是一款支持多种固件的墨水屏管理应用，提供无线推书、文件管理、字体与壁纸配置等功能。" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <style>
     :root {
       --bg: #faf9f5;
@@ -171,6 +172,18 @@
       margin-bottom: 2rem;
     }
 
+    .meta-note a {
+      color: var(--muted);
+      text-decoration: none;
+      border-bottom: 1px solid var(--border);
+      transition: color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .meta-note a:hover {
+      color: var(--text);
+      border-color: var(--text);
+    }
+
     .features {
       list-style: none;
       display: grid;
@@ -245,16 +258,20 @@
     </p>
 
     <div class="actions">
-      <a class="download-btn" href="https://gitee.com/coldin04/Pico_Manager/releases/" target="_blank" rel="noopener noreferrer">
-        <span>Gitee 下载</span>
-        <span aria-hidden="true">→</span>
+      <a class="download-btn" href="https://gitee.com/coldin04/Pico_Manager/releases/download/Android-v0.1.4/app-universal-release.apk">
+        <span>Android 下载</span>
+        <span aria-hidden="true">↓</span>
       </a>
-      <a class="download-btn secondary" href="https://github.com/Coldin04/Pico_Manager/releases" target="_blank" rel="noopener noreferrer">
-        <span>GitHub 下载</span>
-        <span aria-hidden="true">↗</span>
+      <a class="download-btn secondary" href="https://gitee.com/coldin04/Pico_Manager/releases/download/iOS-v0.1.4/PicoManager-iOS-0.1.4.ipa">
+        <span>iOS 下载</span>
+        <span aria-hidden="true">↓</span>
       </a>
     </div>
-    <span class="meta-note">支持 Android (APK) · iOS (IPA 自签)</span>
+    <span class="meta-note">
+      <a href="https://gitee.com/coldin04/Pico_Manager/releases/" target="_blank" rel="noopener noreferrer">Gitee Release</a>
+      /
+      <a href="https://github.com/Coldin04/Pico_Manager/releases" target="_blank" rel="noopener noreferrer">GitHub Release</a>
+    </span>
 
     <ul class="features">
       <li><strong>无线推书</strong>扫码或输入地址快速连接，支持从系统分享导入图书与字体，自动校验设备支持格式并选择目标目录。</li>
