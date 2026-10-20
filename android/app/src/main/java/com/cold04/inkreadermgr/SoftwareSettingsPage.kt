@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +21,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -34,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -45,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -70,10 +75,12 @@ class SoftwareSettingsActivity : ComponentActivity() {
     private var downloadTotal by mutableStateOf<Long?>(null)
     private var downloadFailed by mutableStateOf(false)
     private var permissionPrompt by mutableStateOf(false)
+    private var updateSource by mutableStateOf(AppUpdateSource.GITEE)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        updateSource = AppUpdateSource.load(getSharedPreferences("software_settings", MODE_PRIVATE))
         setContent {
             PicoManageTheme {
                 SoftwareSettingsPage(
@@ -85,6 +92,14 @@ class SoftwareSettingsActivity : ComponentActivity() {
                     downloadTotal = downloadTotal,
                     downloadFailed = downloadFailed,
                     permissionPrompt = permissionPrompt,
+                    updateSource = updateSource,
+                    onUpdateSourceChange = { source ->
+                        updateSource = source
+                        getSharedPreferences("software_settings", MODE_PRIVATE).edit()
+                            .putString(AppUpdateSource.PREFERENCE_KEY, source.preferenceValue).apply()
+                        updateSubtitle = "点击检测"
+                        release = null
+                    },
                     onBack = ::finish,
                     onCheckUpdate = ::checkUpdate,
                     onDismissRelease = { release = null },
@@ -137,7 +152,7 @@ class SoftwareSettingsActivity : ComponentActivity() {
                 }
                 val includePreviews = getSharedPreferences("software_settings", MODE_PRIVATE)
                     .getBoolean("include_preview_releases", false)
-                val result = AppUpdateChecker.check(BuildConfig.VERSION_NAME, includePreviews)
+                val result = AppUpdateChecker.check(BuildConfig.VERSION_NAME, includePreviews, updateSource)
                 if (result.updateAvailable && result.latestRelease != null) {
                     val latest = result.latestRelease
                     if (cached != null && AppUpdateChecker.compareVersions(cached.versionName, latest.versionName) == 0) {
@@ -228,6 +243,8 @@ private fun SoftwareSettingsPage(
     downloadTotal: Long?,
     downloadFailed: Boolean,
     permissionPrompt: Boolean,
+    updateSource: AppUpdateSource,
+    onUpdateSourceChange: (AppUpdateSource) -> Unit,
     onBack: () -> Unit,
     onCheckUpdate: () -> Unit,
     onDismissRelease: () -> Unit,
@@ -244,6 +261,7 @@ private fun SoftwareSettingsPage(
     var includePreviews by remember(preferences) {
         mutableStateOf(preferences.getBoolean("include_preview_releases", false))
     }
+    var choosingUpdateSource by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -274,6 +292,16 @@ private fun SoftwareSettingsPage(
             }
             item {
                 ListItem(
+                    headlineContent = { Text("更新源") },
+                    supportingContent = { Text(updateSource.label) },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = !checking && !downloading) {
+                        choosingUpdateSource = true
+                    },
+                )
+            }
+            item {
+                ListItem(
                     headlineContent = { Text("检查预览版") },
                     trailingContent = { Switch(checked = includePreviews, onCheckedChange = null) },
                     modifier = Modifier.fillMaxWidth().toggleable(
@@ -297,6 +325,39 @@ private fun SoftwareSettingsPage(
                 )
             }
         }
+    }
+
+    if (choosingUpdateSource) {
+        AlertDialog(
+            onDismissRequest = { choosingUpdateSource = false },
+            title = { Text("更新源") },
+            text = {
+                Column(Modifier.selectableGroup()) {
+                    AppUpdateSource.entries.forEach { source ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(
+                                selected = updateSource == source,
+                                role = Role.RadioButton,
+                            ) {
+                                onUpdateSourceChange(source)
+                                choosingUpdateSource = false
+                            },
+                        ) {
+                            RadioButton(selected = updateSource == source, onClick = null)
+                            Text(
+                                source.label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(start = 16.dp),
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { choosingUpdateSource = false }) { Text("取消") }
+            },
+        )
     }
 
     release?.let { selected ->

@@ -25,8 +25,6 @@ internal data class AppUpdateCheck(
 )
 
 internal object AppUpdateChecker {
-    private const val RELEASES_URL =
-        "https://api.github.com/repos/Coldin04/Pico_Manager/releases?per_page=100"
     private const val RELEASE_PREFIX = "Android-v"
     private val versionPattern = Regex(
         "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-preview([1-9][0-9]*)?)?$",
@@ -38,44 +36,62 @@ internal object AppUpdateChecker {
         return leftVersion.compareTo(rightVersion)
     }
 
-    suspend fun check(currentVersion: String, includePreviews: Boolean): AppUpdateCheck =
+    suspend fun check(
+        currentVersion: String,
+        includePreviews: Boolean,
+        source: AppUpdateSource,
+    ): AppUpdateCheck =
         withContext(Dispatchers.IO) {
-            val current = AppVersion.parse(currentVersion)
-                ?: throw IOException("当前 App 版本格式无法识别")
-            val releases = fetchReleases()
-            val latestCandidate = (0 until releases.length())
-                .mapNotNull { index -> parseRelease(releases.optJSONObject(index), includePreviews) }
-                .maxByOrNull { it.version }
-            val latestRelease = latestCandidate?.takeIf { it.version > current }?.let { candidate ->
-                AppRelease(
-                    versionName = candidate.versionName,
-                    releasePage = candidate.releasePage,
-                    notes = candidate.notes,
-                    apkDownloadUrl = candidate.apkDownloadUrl,
-                    apkSizeBytes = candidate.apkSizeBytes,
-                    apkArchitecture = candidate.apkArchitecture,
-                    apkSha256 = resolveSha256(candidate),
-                )
-            }
-            AppUpdateCheck(
-                currentVersion = current.toString(),
-                latestRelease = latestRelease,
-                updateAvailable = latestRelease != null,
-            )
+            checkReleases(currentVersion, includePreviews, source, fetchReleases(source), Build.SUPPORTED_ABIS.toList())
         }
 
-    private fun fetchReleases(): JSONArray {
-        val connection = URL(RELEASES_URL).openConnection() as HttpsURLConnection
+    internal fun checkReleases(
+        currentVersion: String,
+        includePreviews: Boolean,
+        source: AppUpdateSource,
+        releases: JSONArray,
+        supportedAbis: List<String>,
+        fetchChecksum: (String, String) -> String? = ::fetchChecksums,
+    ): AppUpdateCheck {
+        val current = AppVersion.parse(currentVersion)
+            ?: throw IOException("当前 App 版本格式无法识别")
+        val latestCandidate = (0 until releases.length())
+            .mapNotNull { index -> parseRelease(releases.optJSONObject(index), includePreviews, source, supportedAbis) }
+            .maxByOrNull { it.version }
+        val latestRelease = latestCandidate?.takeIf { it.version > current }?.let { candidate ->
+            AppRelease(
+                versionName = candidate.versionName,
+                releasePage = candidate.releasePage,
+                notes = candidate.notes,
+                apkDownloadUrl = candidate.apkDownloadUrl,
+                apkSizeBytes = candidate.apkSizeBytes,
+                apkArchitecture = candidate.apkArchitecture,
+                apkSha256 = resolveSha256(candidate, source, fetchChecksum),
+            )
+        }
+        return AppUpdateCheck(
+            currentVersion = current.toString(),
+            latestRelease = latestRelease,
+            updateAvailable = latestRelease != null,
+        )
+    }
+
+    private fun fetchReleases(source: AppUpdateSource): JSONArray {
+        val connection = URL(source.releasesUrl).openConnection() as HttpsURLConnection
         connection.requestMethod = "GET"
         connection.connectTimeout = 10_000
         connection.readTimeout = 10_000
-        connection.setRequestProperty("Accept", "application/vnd.github+json")
-        connection.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+        if (source == AppUpdateSource.GITHUB) {
+            connection.setRequestProperty("Accept", "application/vnd.github+json")
+            connection.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+        } else {
+            connection.setRequestProperty("Accept", "application/json")
+        }
         connection.setRequestProperty("User-Agent", "PicoManager-Android")
         try {
             val responseCode = connection.responseCode
             if (responseCode !in 200..299) {
-                throw IOException("GitHub 返回 HTTP $responseCode")
+                throw IOException("${source.label} 返回 HTTP $responseCode")
             }
             val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             return JSONArray(body)
@@ -87,8 +103,11 @@ internal object AppUpdateChecker {
     private fun parseRelease(
         release: org.json.JSONObject?,
         includePreviews: Boolean,
+        source: AppUpdateSource,
+        supportedAbis: List<String>,
     ): ReleaseCandidate? {
-        if (release == null || release.optBoolean("draft", true)) return null
+        // Gitee only exposes published releases and omits the draft field.
+        if (release == null || release.optBoolean("draft", source == AppUpdateSource.GITHUB)) return null
         val tag = release.optString("tag_name")
         if (!tag.startsWith(RELEASE_PREFIX)) return null
         val versionName = tag.removePrefix(RELEASE_PREFIX)
@@ -103,21 +122,22 @@ internal object AppUpdateChecker {
         } ?: apkAssets.firstOrNull {
             it.optString("name").endsWith("-$abi.apk", ignoreCase = true)
         }
-        val abiAsset = Build.SUPPORTED_ABIS.firstNotNullOfOrNull { abi ->
+        val abiAsset = supportedAbis.firstNotNullOfOrNull { abi ->
             apkFor(abi)?.let { abi to it }
         }
         val selectedAsset = abiAsset?.second ?: apkFor("universal") ?: return null
         val architecture = abiAsset?.first ?: "universal"
         val assetName = selectedAsset.optString("name")
         val downloadUrl = selectedAsset.optString("browser_download_url")
-            .takeIf { it.startsWith("https://github.com/") }
+            .takeIf(source::acceptsUrl)
             ?: return null
         val checksumsUrl = (0 until assets.length()).mapNotNull { assets.optJSONObject(it) }
             .firstOrNull { it.optString("name").equals("SHA256SUMS.txt", ignoreCase = true) }
             ?.optString("browser_download_url")
-            ?.takeIf { it.startsWith("https://github.com/") }
+            ?.takeIf(source::acceptsUrl)
 
-        val page = release.optString("html_url").takeIf { it.startsWith("https://github.com/") }
+        val page = release.optString("html_url").takeIf(source::acceptsUrl)
+            ?: (if (source == AppUpdateSource.GITEE) "${source.repositoryUrl}/releases/tag/$tag" else null)
             ?: return null
         return ReleaseCandidate(
             versionName = versionName,
@@ -133,16 +153,20 @@ internal object AppUpdateChecker {
         )
     }
 
-    private fun resolveSha256(candidate: ReleaseCandidate): String {
+    private fun resolveSha256(
+        candidate: ReleaseCandidate,
+        source: AppUpdateSource,
+        fetchChecksum: (String, String) -> String?,
+    ): String {
         val apiDigest = candidate.assetDigest.removePrefix("sha256:")
             .takeIf { it.matches(Regex("[0-9a-fA-F]{64}")) }
         val checksumsDigest = candidate.checksumsUrl?.let { url ->
-            runCatching { fetchChecksums(url, candidate.apkFileName) }.getOrNull()
+            runCatching { fetchChecksum(url, candidate.apkFileName) }.getOrNull()
         }
         if (apiDigest != null && checksumsDigest != null && !apiDigest.equals(checksumsDigest, ignoreCase = true)) {
-            throw IOException("GitHub Release 的 APK 校验值不一致")
+            throw IOException("${source.label} Release 的 APK 校验值不一致")
         }
-        return checksumsDigest ?: apiDigest ?: throw IOException("GitHub Release 缺少 APK 的 SHA-256 校验值")
+        return checksumsDigest ?: apiDigest ?: throw IOException("${source.label} Release 缺少 APK 的 SHA-256 校验值")
     }
 
     private fun fetchChecksums(url: String, apkFileName: String): String? {

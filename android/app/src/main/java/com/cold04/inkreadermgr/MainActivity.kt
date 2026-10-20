@@ -119,9 +119,9 @@ class MainActivity : ComponentActivity() {
         automaticUpdateCheckRunning = true
         lifecycleScope.launch {
             try {
-                val includePreviews = getSharedPreferences("software_settings", MODE_PRIVATE)
-                    .getBoolean("include_preview_releases", false)
-                val check = AppUpdateChecker.check(BuildConfig.VERSION_NAME, includePreviews)
+                val settings = getSharedPreferences("software_settings", MODE_PRIVATE)
+                val includePreviews = settings.getBoolean("include_preview_releases", false)
+                val check = AppUpdateChecker.check(BuildConfig.VERSION_NAME, includePreviews, AppUpdateSource.load(settings))
                 if (check.updateAvailable) {
                     val update = check.latestRelease ?: return@launch
                     startActivity(Intent(this@MainActivity, AppUpdateActivity::class.java).apply {

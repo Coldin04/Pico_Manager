@@ -122,7 +122,7 @@ class AppUpdateActivity : ComponentActivity() {
 
             val prefs = getSharedPreferences("software_settings", MODE_PRIVATE)
             val includePreviews = prefs.getBoolean("include_preview_releases", false)
-            val result = AppUpdateChecker.check(BuildConfig.VERSION_NAME, includePreviews)
+            val result = AppUpdateChecker.check(BuildConfig.VERSION_NAME, includePreviews, AppUpdateSource.load(prefs))
             if (!result.updateAvailable || result.latestRelease == null) {
                 statusMessage = "已是最新版本"
                 if (automaticallyOpened) finish()
@@ -252,7 +252,7 @@ private fun AppUpdatePage(
                         }
                     }
                     ListItem(
-                        headlineContent = { Text("GitHub Release") },
+                        headlineContent = { Text("发布详情") },
                         supportingContent = { Text("查看完整说明和文件") },
                         trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
                         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenRelease),
