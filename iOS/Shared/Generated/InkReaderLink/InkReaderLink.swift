@@ -746,11 +746,17 @@ public func FfiConverterTypeBooksendSdk_lower(_ value: BooksendSdk) -> UInt64 {
 public protocol SdkDeviceClientProtocol: AnyObject, Sendable {
     
     /**
-     * Validates and applies changes against a previously returned snapshot.
+     * Fetches device information for an information page. Keys are stable identifiers
+     * intended for app-side localization; values are returned as displayable text.
+     *
      * # Errors
-     * Returns capability, conflict, validation, transport, or protocol errors.
+     *
+     * Returns the mapped SDK operation error for unsupported capabilities,
+     * transport failures, or invalid device responses.
      */
-    func applySettings(expected: SdkSettingsSnapshot, changes: [SdkSettingChange]) async throws  -> SdkSettingsSnapshot
+    func deviceInfo() async throws  -> [SdkDeviceInfoField]
+
+    func profile()  -> SdkDeviceProfile
     
     /**
      * Creates a remote directory.
@@ -781,56 +787,13 @@ public protocol SdkDeviceClientProtocol: AnyObject, Sendable {
     func deleteFiles(paths: [String]) async throws 
     
     /**
-     * Deletes an installed font family.
-     * # Errors
-     * Returns validation, capability, transport, or protocol errors.
-     */
-    func deleteFontFamily(family: String) async throws 
-    
-    /**
-     * Deletes an OPDS server by index.
-     * # Errors
-     * Returns capability, transport, or protocol errors.
-     */
-    func deleteOpdsServer(index: UInt32) async throws 
-    
-    /**
-     * Deletes one wallpaper image by its file name.
-     *
-     * # Errors
-     *
-     * Returns validation, capability, transport, or protocol errors.
-     */
-    func deleteWallpaper(fileName: String) async throws 
-    
-    /**
-     * Deletes a saved Wi-Fi credential.
-     *
-     * # Errors
-     *
-     * Returns validation, capability, transport, or protocol errors.
-     */
-    func deleteWifiNetwork(index: UInt32?) async throws 
-    
-    /**
-     * Fetches device information for an information page. Keys are stable identifiers
-     * intended for app-side localization; values are returned as displayable text.
-     *
-     * # Errors
-     *
-     * Returns the mapped SDK operation error for unsupported capabilities,
-     * transport failures, or invalid device responses.
-     */
-    func deviceInfo() async throws  -> [SdkDeviceInfoField]
-    
-    /**
      * Streams a remote file to a local destination.
      *
      * # Errors
      *
      * Returns file, capability, transport, or protocol errors.
      */
-    func download(path: String, destination: String) async throws 
+    func download(path: String, destination: String) async throws
     
     /**
      * Downloads multiple remote files to the supplied local destinations.
@@ -840,7 +803,7 @@ public protocol SdkDeviceClientProtocol: AnyObject, Sendable {
      *
      * Returns validation, file, capability, transport, or protocol errors.
      */
-    func downloadFiles(files: [SdkFileDownload]) async throws 
+    func downloadFiles(files: [SdkFileDownload]) async throws
     
     /**
      * Lists files at a device location.
@@ -852,52 +815,13 @@ public protocol SdkDeviceClientProtocol: AnyObject, Sendable {
     func listFiles(location: SdkFileLocation) async throws  -> [SdkFileEntry]
     
     /**
-     * Lists installed SD-card font families.
-     * # Errors
-     * Returns capability, transport, or protocol errors.
-     */
-    func listFonts() async throws  -> SdkFontCatalog
-    
-    /**
-     * Lists saved OPDS servers without passwords.
-     * # Errors
-     * Returns capability, transport, or protocol errors.
-     */
-    func listOpdsServers() async throws  -> [SdkOpdsServer]
-    
-    /**
-     * Returns current editable settings and rendering metadata.
-     * # Errors
-     * Returns capability, transport, or protocol errors.
-     */
-    func listSettings() async throws  -> SdkSettingsSnapshot
-    
-    /**
-     * Lists images managed as wallpapers by the selected firmware.
-     *
-     * # Errors
-     *
-     * Returns capability, transport, or protocol errors.
-     */
-    func listWallpapers() async throws  -> [SdkFileEntry]
-    
-    /**
-     * Lists saved Wi-Fi credentials without passwords.
-     *
-     * # Errors
-     *
-     * Returns capability, transport, or protocol errors.
-     */
-    func listWifiNetworks() async throws  -> [SdkWifiNetwork]
-    
-    /**
      * Moves a remote file.
      *
      * # Errors
      *
      * Returns validation, capability, transport, or protocol errors.
      */
-    func moveFile(path: String, destination: String) async throws 
+    func moveFile(path: String, destination: String) async throws
     
     /**
      * Moves multiple remote files into one existing directory, serially.
@@ -906,9 +830,7 @@ public protocol SdkDeviceClientProtocol: AnyObject, Sendable {
      *
      * Returns validation, capability, transport, or protocol errors.
      */
-    func moveFiles(paths: [String], destination: String) async throws 
-    
-    func profile()  -> SdkDeviceProfile
+    func moveFiles(paths: [String], destination: String) async throws
     
     /**
      * Renames a remote file.
@@ -917,23 +839,7 @@ public protocol SdkDeviceClientProtocol: AnyObject, Sendable {
      *
      * Returns validation, capability, transport, or protocol errors.
      */
-    func rename(path: String, newName: String) async throws 
-    
-    /**
-     * Adds or updates an OPDS server.
-     * # Errors
-     * Returns validation, capability, transport, or protocol errors.
-     */
-    func saveOpdsServer(credential: SdkOpdsCredential) async throws 
-    
-    /**
-     * Adds or updates a Wi-Fi credential.
-     *
-     * # Errors
-     *
-     * Returns validation, capability, transport, or protocol errors.
-     */
-    func saveWifiNetwork(credential: SdkWifiCredential) async throws 
+    func rename(path: String, newName: String) async throws
     
     /**
      * Streams a local file to the device.
@@ -945,32 +851,99 @@ public protocol SdkDeviceClientProtocol: AnyObject, Sendable {
     func upload(localPath: String, fileName: String, location: SdkFileLocation, options: SdkUploadOptions, progressObserver: SdkUploadProgressObserver?) async throws  -> SdkUploadResult
     
     /**
+     * Deletes an installed font family.
+     * # Errors
+     * Returns validation, capability, transport, or protocol errors.
+     */
+    func deleteFontFamily(family: String) async throws
+    
+    /**
+     * Lists installed SD-card font families.
+     * # Errors
+     * Returns capability, transport, or protocol errors.
+     */
+    func listFonts() async throws  -> SdkFontCatalog
+    
+    /**
      * Streams a device-supported font file. Read Pico rejects same-name files by default.
      * # Errors
      * Returns validation, capability, file, transport, or protocol errors.
      */
-    func uploadFont(family: String, localPath: String, fileName: String) async throws 
+    func uploadFont(family: String, localPath: String, fileName: String) async throws
     
     /**
      * Streams a font and optionally replaces a same-name Read Pico font.
      * # Errors
      * Returns validation, capability, file, transport, or protocol errors.
      */
-    func uploadFontWithOverwrite(family: String, localPath: String, fileName: String, overwrite: Bool) async throws 
+    func uploadFontWithOverwrite(family: String, localPath: String, fileName: String, overwrite: Bool) async throws
     
     /**
      * Streams a font file with progress and an explicit overwrite choice.
      * # Errors
      * Returns validation, capability, file, transport, or protocol errors.
      */
-    func uploadFontWithOverwriteAndProgress(family: String, localPath: String, fileName: String, overwrite: Bool, progressObserver: SdkUploadProgressObserver) async throws 
+    func uploadFontWithOverwriteAndProgress(family: String, localPath: String, fileName: String, overwrite: Bool, progressObserver: SdkUploadProgressObserver) async throws
     
     /**
      * Streams a font file and reports bytes supplied to the HTTP request body.
      * # Errors
      * Returns validation, capability, file, transport, or protocol errors.
      */
-    func uploadFontWithProgress(family: String, localPath: String, fileName: String, progressObserver: SdkUploadProgressObserver) async throws 
+    func uploadFontWithProgress(family: String, localPath: String, fileName: String, progressObserver: SdkUploadProgressObserver) async throws
+    
+    /**
+     * Deletes an OPDS server by index.
+     * # Errors
+     * Returns capability, transport, or protocol errors.
+     */
+    func deleteOpdsServer(index: UInt32) async throws
+    
+    /**
+     * Lists saved OPDS servers without passwords.
+     * # Errors
+     * Returns capability, transport, or protocol errors.
+     */
+    func listOpdsServers() async throws  -> [SdkOpdsServer]
+    
+    /**
+     * Adds or updates an OPDS server.
+     * # Errors
+     * Returns validation, capability, transport, or protocol errors.
+     */
+    func saveOpdsServer(credential: SdkOpdsCredential) async throws
+    
+    /**
+     * Validates and applies changes against a previously returned snapshot.
+     * # Errors
+     * Returns capability, conflict, validation, transport, or protocol errors.
+     */
+    func applySettings(expected: SdkSettingsSnapshot, changes: [SdkSettingChange]) async throws  -> SdkSettingsSnapshot
+    
+    /**
+     * Returns current editable settings and rendering metadata.
+     * # Errors
+     * Returns capability, transport, or protocol errors.
+     */
+    func listSettings() async throws  -> SdkSettingsSnapshot
+    
+    /**
+     * Deletes one wallpaper image by its file name.
+     *
+     * # Errors
+     *
+     * Returns validation, capability, transport, or protocol errors.
+     */
+    func deleteWallpaper(fileName: String) async throws
+    
+    /**
+     * Lists images managed as wallpapers by the selected firmware.
+     *
+     * # Errors
+     *
+     * Returns capability, transport, or protocol errors.
+     */
+    func listWallpapers() async throws  -> [SdkFileEntry]
     
     /**
      * Uploads a wallpaper image and optionally applies it to the lock screen.
@@ -980,6 +953,33 @@ public protocol SdkDeviceClientProtocol: AnyObject, Sendable {
      * Returns validation, capability, file, transport, conflict, or protocol errors.
      */
     func uploadWallpaper(localPath: String, fileName: String, overwrite: Bool, applyToLockScreen: Bool) async throws  -> SdkWallpaperUploadResult
+    
+    /**
+     * Deletes a saved Wi-Fi credential.
+     *
+     * # Errors
+     *
+     * Returns validation, capability, transport, or protocol errors.
+     */
+    func deleteWifiNetwork(index: UInt32?) async throws
+    
+    /**
+     * Lists saved Wi-Fi credentials without passwords.
+     *
+     * # Errors
+     *
+     * Returns capability, transport, or protocol errors.
+     */
+    func listWifiNetworks() async throws  -> [SdkWifiNetwork]
+    
+    /**
+     * Adds or updates a Wi-Fi credential.
+     *
+     * # Errors
+     *
+     * Returns validation, capability, transport, or protocol errors.
+     */
+    func saveWifiNetwork(credential: SdkWifiCredential) async throws
     
 }
 open class SdkDeviceClient: SdkDeviceClientProtocol, @unchecked Sendable {
@@ -1100,26 +1100,39 @@ public static func connectAndVerifyWithParameters(deviceType: String, parameters
 
     
     /**
-     * Validates and applies changes against a previously returned snapshot.
+     * Fetches device information for an information page. Keys are stable identifiers
+     * intended for app-side localization; values are returned as displayable text.
+     *
      * # Errors
-     * Returns capability, conflict, validation, transport, or protocol errors.
+     *
+     * Returns the mapped SDK operation error for unsupported capabilities,
+     * transport failures, or invalid device responses.
      */
-open func applySettings(expected: SdkSettingsSnapshot, changes: [SdkSettingChange])async throws  -> SdkSettingsSnapshot  {
+open func deviceInfo()async throws  -> [SdkDeviceInfoField]  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_apply_settings(
-                        self.uniffiCloneHandle(),FfiConverterTypeSdkSettingsSnapshot_lower(expected),FfiConverterSequenceTypeSdkSettingChange.lower(changes)
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_device_info(
+                        self.uniffiCloneHandle()
                 )
             },
             pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterTypeSdkSettingsSnapshot_lift,
+            liftFunc: FfiConverterSequenceTypeSdkDeviceInfoField.lift,
             errorHandler: FfiConverterTypeSdkOperationError_lift
         )
 }
     
+open func profile() -> SdkDeviceProfile  {
+    return try!  FfiConverterTypeSdkDeviceProfile_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_profile(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+
     /**
      * Creates a remote directory.
      *
@@ -1186,119 +1199,6 @@ open func deleteFiles(paths: [String])async throws   {
             completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
             freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
             liftFunc: { $0 },
-            errorHandler: FfiConverterTypeSdkOperationError_lift
-        )
-}
-    
-    /**
-     * Deletes an installed font family.
-     * # Errors
-     * Returns validation, capability, transport, or protocol errors.
-     */
-open func deleteFontFamily(family: String)async throws   {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_delete_font_family(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(family)
-                )
-            },
-            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
-            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
-            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
-            liftFunc: { $0 },
-            errorHandler: FfiConverterTypeSdkOperationError_lift
-        )
-}
-    
-    /**
-     * Deletes an OPDS server by index.
-     * # Errors
-     * Returns capability, transport, or protocol errors.
-     */
-open func deleteOpdsServer(index: UInt32)async throws   {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_delete_opds_server(
-                        self.uniffiCloneHandle(),FfiConverterUInt32.lower(index)
-                )
-            },
-            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
-            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
-            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
-            liftFunc: { $0 },
-            errorHandler: FfiConverterTypeSdkOperationError_lift
-        )
-}
-    
-    /**
-     * Deletes one wallpaper image by its file name.
-     *
-     * # Errors
-     *
-     * Returns validation, capability, transport, or protocol errors.
-     */
-open func deleteWallpaper(fileName: String)async throws   {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_delete_wallpaper(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(fileName)
-                )
-            },
-            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
-            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
-            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
-            liftFunc: { $0 },
-            errorHandler: FfiConverterTypeSdkOperationError_lift
-        )
-}
-    
-    /**
-     * Deletes a saved Wi-Fi credential.
-     *
-     * # Errors
-     *
-     * Returns validation, capability, transport, or protocol errors.
-     */
-open func deleteWifiNetwork(index: UInt32?)async throws   {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_delete_wifi_network(
-                        self.uniffiCloneHandle(),FfiConverterOptionUInt32.lower(index)
-                )
-            },
-            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
-            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
-            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
-            liftFunc: { $0 },
-            errorHandler: FfiConverterTypeSdkOperationError_lift
-        )
-}
-    
-    /**
-     * Fetches device information for an information page. Keys are stable identifiers
-     * intended for app-side localization; values are returned as displayable text.
-     *
-     * # Errors
-     *
-     * Returns the mapped SDK operation error for unsupported capabilities,
-     * transport failures, or invalid device responses.
-     */
-open func deviceInfo()async throws  -> [SdkDeviceInfoField]  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_device_info(
-                        self.uniffiCloneHandle()
-                )
-            },
-            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterSequenceTypeSdkDeviceInfoField.lift,
             errorHandler: FfiConverterTypeSdkOperationError_lift
         )
 }
@@ -1374,115 +1274,6 @@ open func listFiles(location: SdkFileLocation)async throws  -> [SdkFileEntry]  {
 }
     
     /**
-     * Lists installed SD-card font families.
-     * # Errors
-     * Returns capability, transport, or protocol errors.
-     */
-open func listFonts()async throws  -> SdkFontCatalog  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_list_fonts(
-                        self.uniffiCloneHandle()
-                )
-            },
-            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterTypeSdkFontCatalog_lift,
-            errorHandler: FfiConverterTypeSdkOperationError_lift
-        )
-}
-    
-    /**
-     * Lists saved OPDS servers without passwords.
-     * # Errors
-     * Returns capability, transport, or protocol errors.
-     */
-open func listOpdsServers()async throws  -> [SdkOpdsServer]  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_list_opds_servers(
-                        self.uniffiCloneHandle()
-                )
-            },
-            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterSequenceTypeSdkOpdsServer.lift,
-            errorHandler: FfiConverterTypeSdkOperationError_lift
-        )
-}
-    
-    /**
-     * Returns current editable settings and rendering metadata.
-     * # Errors
-     * Returns capability, transport, or protocol errors.
-     */
-open func listSettings()async throws  -> SdkSettingsSnapshot  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_list_settings(
-                        self.uniffiCloneHandle()
-                )
-            },
-            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterTypeSdkSettingsSnapshot_lift,
-            errorHandler: FfiConverterTypeSdkOperationError_lift
-        )
-}
-    
-    /**
-     * Lists images managed as wallpapers by the selected firmware.
-     *
-     * # Errors
-     *
-     * Returns capability, transport, or protocol errors.
-     */
-open func listWallpapers()async throws  -> [SdkFileEntry]  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_list_wallpapers(
-                        self.uniffiCloneHandle()
-                )
-            },
-            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterSequenceTypeSdkFileEntry.lift,
-            errorHandler: FfiConverterTypeSdkOperationError_lift
-        )
-}
-    
-    /**
-     * Lists saved Wi-Fi credentials without passwords.
-     *
-     * # Errors
-     *
-     * Returns capability, transport, or protocol errors.
-     */
-open func listWifiNetworks()async throws  -> [SdkWifiNetwork]  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_list_wifi_networks(
-                        self.uniffiCloneHandle()
-                )
-            },
-            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterSequenceTypeSdkWifiNetwork.lift,
-            errorHandler: FfiConverterTypeSdkOperationError_lift
-        )
-}
-    
-    /**
      * Moves a remote file.
      *
      * # Errors
@@ -1528,15 +1319,6 @@ open func moveFiles(paths: [String], destination: String)async throws   {
         )
 }
     
-open func profile() -> SdkDeviceProfile  {
-    return try!  FfiConverterTypeSdkDeviceProfile_lift(try! rustCall() {
-        uniffiCallStatus in
-    uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_profile(
-            self.uniffiCloneHandle(),uniffiCallStatus
-    )
-})
-}
-    
     /**
      * Renames a remote file.
      *
@@ -1550,50 +1332,6 @@ open func rename(path: String, newName: String)async throws   {
             rustFutureFunc: {
                 uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_rename(
                         self.uniffiCloneHandle(),FfiConverterString.lower(path),FfiConverterString.lower(newName)
-                )
-            },
-            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
-            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
-            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
-            liftFunc: { $0 },
-            errorHandler: FfiConverterTypeSdkOperationError_lift
-        )
-}
-    
-    /**
-     * Adds or updates an OPDS server.
-     * # Errors
-     * Returns validation, capability, transport, or protocol errors.
-     */
-open func saveOpdsServer(credential: SdkOpdsCredential)async throws   {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_save_opds_server(
-                        self.uniffiCloneHandle(),FfiConverterTypeSdkOpdsCredential_lower(credential)
-                )
-            },
-            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
-            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
-            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
-            liftFunc: { $0 },
-            errorHandler: FfiConverterTypeSdkOperationError_lift
-        )
-}
-    
-    /**
-     * Adds or updates a Wi-Fi credential.
-     *
-     * # Errors
-     *
-     * Returns validation, capability, transport, or protocol errors.
-     */
-open func saveWifiNetwork(credential: SdkWifiCredential)async throws   {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_save_wifi_network(
-                        self.uniffiCloneHandle(),FfiConverterTypeSdkWifiCredential_lower(credential)
                 )
             },
             pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
@@ -1623,6 +1361,48 @@ open func upload(localPath: String, fileName: String, location: SdkFileLocation,
             completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeSdkUploadResult_lift,
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+    
+    /**
+     * Deletes an installed font family.
+     * # Errors
+     * Returns validation, capability, transport, or protocol errors.
+     */
+open func deleteFontFamily(family: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_delete_font_family(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(family)
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+    
+    /**
+     * Lists installed SD-card font families.
+     * # Errors
+     * Returns capability, transport, or protocol errors.
+     */
+open func listFonts()async throws  -> SdkFontCatalog  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_list_fonts(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSdkFontCatalog_lift,
             errorHandler: FfiConverterTypeSdkOperationError_lift
         )
 }
@@ -1712,6 +1492,157 @@ open func uploadFontWithProgress(family: String, localPath: String, fileName: St
 }
     
     /**
+     * Deletes an OPDS server by index.
+     * # Errors
+     * Returns capability, transport, or protocol errors.
+     */
+open func deleteOpdsServer(index: UInt32)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_delete_opds_server(
+                        self.uniffiCloneHandle(),FfiConverterUInt32.lower(index)
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+    
+    /**
+     * Lists saved OPDS servers without passwords.
+     * # Errors
+     * Returns capability, transport, or protocol errors.
+     */
+open func listOpdsServers()async throws  -> [SdkOpdsServer]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_list_opds_servers(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeSdkOpdsServer.lift,
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+    
+    /**
+     * Adds or updates an OPDS server.
+     * # Errors
+     * Returns validation, capability, transport, or protocol errors.
+     */
+open func saveOpdsServer(credential: SdkOpdsCredential)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_save_opds_server(
+                        self.uniffiCloneHandle(),FfiConverterTypeSdkOpdsCredential_lower(credential)
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+    
+    /**
+     * Validates and applies changes against a previously returned snapshot.
+     * # Errors
+     * Returns capability, conflict, validation, transport, or protocol errors.
+     */
+open func applySettings(expected: SdkSettingsSnapshot, changes: [SdkSettingChange])async throws  -> SdkSettingsSnapshot  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_apply_settings(
+                        self.uniffiCloneHandle(),FfiConverterTypeSdkSettingsSnapshot_lower(expected),FfiConverterSequenceTypeSdkSettingChange.lower(changes)
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSdkSettingsSnapshot_lift,
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+    
+    /**
+     * Returns current editable settings and rendering metadata.
+     * # Errors
+     * Returns capability, transport, or protocol errors.
+     */
+open func listSettings()async throws  -> SdkSettingsSnapshot  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_list_settings(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSdkSettingsSnapshot_lift,
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+    
+    /**
+     * Deletes one wallpaper image by its file name.
+     *
+     * # Errors
+     *
+     * Returns validation, capability, transport, or protocol errors.
+     */
+open func deleteWallpaper(fileName: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_delete_wallpaper(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(fileName)
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+    
+    /**
+     * Lists images managed as wallpapers by the selected firmware.
+     *
+     * # Errors
+     *
+     * Returns capability, transport, or protocol errors.
+     */
+open func listWallpapers()async throws  -> [SdkFileEntry]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_list_wallpapers(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeSdkFileEntry.lift,
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+    
+    /**
      * Uploads a wallpaper image and optionally applies it to the lock screen.
      *
      * # Errors
@@ -1730,6 +1661,75 @@ open func uploadWallpaper(localPath: String, fileName: String, overwrite: Bool, 
             completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeSdkWallpaperUploadResult_lift,
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+    
+    /**
+     * Deletes a saved Wi-Fi credential.
+     *
+     * # Errors
+     *
+     * Returns validation, capability, transport, or protocol errors.
+     */
+open func deleteWifiNetwork(index: UInt32?)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_delete_wifi_network(
+                        self.uniffiCloneHandle(),FfiConverterOptionUInt32.lower(index)
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+    
+    /**
+     * Lists saved Wi-Fi credentials without passwords.
+     *
+     * # Errors
+     *
+     * Returns capability, transport, or protocol errors.
+     */
+open func listWifiNetworks()async throws  -> [SdkWifiNetwork]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_list_wifi_networks(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeSdkWifiNetwork.lift,
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+
+    /**
+     * Adds or updates a Wi-Fi credential.
+     *
+     * # Errors
+     *
+     * Returns validation, capability, transport, or protocol errors.
+     */
+open func saveWifiNetwork(credential: SdkWifiCredential)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_save_wifi_network(
+                        self.uniffiCloneHandle(),FfiConverterTypeSdkWifiCredential_lower(credential)
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_void,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_void,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
             errorHandler: FfiConverterTypeSdkOperationError_lift
         )
 }
@@ -4748,115 +4748,115 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_booksendsdk_baseline_profile() != 21852) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_device_info() != 8990) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_booksendsdk_supported_devices() != 55060) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_profile() != 7952) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_booksendsdk_version() != 52674) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_create_directory() != 41451) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_apply_settings() != 42979) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete() != 56263) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_create_directory() != 61477) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete_files() != 5636) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete() != 10324) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_download() != 13549) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete_files() != 52495) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_download_files() != 13545) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete_font_family() != 20635) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_list_files() != 28777) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete_opds_server() != 6248) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_move_file() != 38629) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete_wallpaper() != 2516) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_move_files() != 15615) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete_wifi_network() != 38451) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_rename() != 42970) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_device_info() != 3551) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload() != 31033) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_download() != 34281) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete_font_family() != 10607) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_download_files() != 10069) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_list_fonts() != 33082) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_list_files() != 53814) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload_font() != 30032) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_list_fonts() != 24615) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload_font_with_overwrite() != 55979) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_list_opds_servers() != 55653) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload_font_with_overwrite_and_progress() != 19132) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_list_settings() != 12679) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload_font_with_progress() != 4379) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_list_wallpapers() != 20624) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete_opds_server() != 27034) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_list_wifi_networks() != 32352) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_list_opds_servers() != 42207) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_move_file() != 25405) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_save_opds_server() != 30227) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_move_files() != 41051) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_apply_settings() != 2552) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_profile() != 8909) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_list_settings() != 8469) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_rename() != 59750) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete_wallpaper() != 23266) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_save_opds_server() != 49787) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_list_wallpapers() != 39954) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_save_wifi_network() != 45405) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload_wallpaper() != 65185) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload() != 56372) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete_wifi_network() != 21087) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload_font() != 20494) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_list_wifi_networks() != 57827) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload_font_with_overwrite() != 21214) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_save_wifi_network() != 64709) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload_font_with_overwrite_and_progress() != 44284) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkuploadprogressobserver_on_progress() != 53272) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload_font_with_progress() != 51049) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_booksendsdk_baseline_profile() != 25479) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload_wallpaper() != 41617) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_booksendsdk_supported_devices() != 25639) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkuploadprogressobserver_on_progress() != 53349) {
+    if (uniffi_inkreaderlink_uniffi_checksum_method_booksendsdk_version() != 28025) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_constructor_booksendsdk_new() != 50291) {
+    if (uniffi_inkreaderlink_uniffi_checksum_constructor_sdkdeviceclient_connect() != 39331) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_constructor_sdkdeviceclient_connect() != 29043) {
+    if (uniffi_inkreaderlink_uniffi_checksum_constructor_sdkdeviceclient_connect_and_verify() != 15803) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_constructor_sdkdeviceclient_connect_and_verify() != 59990) {
+    if (uniffi_inkreaderlink_uniffi_checksum_constructor_sdkdeviceclient_connect_and_verify_with_parameters() != 27633) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inkreaderlink_uniffi_checksum_constructor_sdkdeviceclient_connect_and_verify_with_parameters() != 55085) {
+    if (uniffi_inkreaderlink_uniffi_checksum_constructor_booksendsdk_new() != 59354) {
         return InitializationResult.apiChecksumMismatch
     }
 

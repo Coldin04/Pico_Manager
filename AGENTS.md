@@ -71,13 +71,16 @@
 
 - 欢迎贡献 Read Pico、CrossPoint 之外的设备或固件支持，建议在SDK仓库写明能力和逻辑，APP仓库只负责界面实现。新增 App 平台时，使用该平台的原生开发方式，并保持本文件的能力驱动原则。
 - 新设备协议与设备专属行为应优先落在 `InkReaderLink` 的 adapter/设备定义中；App 使用统一模型渲染。
+- 修改 SDK 时，固件实现必须集中在 `inkreaderlink-core/src/adapters/<firmware>/`：连接解析、认证/会话、请求/响应、错误语义、分页、握手、限制及恢复全部由对应 adapter 负责。`DeviceClient` 只处理通用能力检查、输入校验、修改操作串行化和统一委派；禁止添加固件专属字段、凭据键、endpoint 或按设备身份选择业务流程的分支。
+- 多步协议必须以固件无关的类型化参数传入 adapter，并返回统一结果/错误；共享 transport 只处理通用网络与流式 I/O。不得将协议特判从 client 搬到 App、UniFFI 或共享 transport，也不得以历史实现为例外。选择 adapter 只发生在设备注册/连接创建阶段，修改 profile 不得改变协议。
+- SDK 的测试也遵守职责划分：固件请求与协议测试位于对应固件目录，client/transport 仅验证通用行为；使用最小合成数据与保留测试域名，移除私人 IP、真实书名及无覆盖价值的重复样例。UniFFI 按模型映射、连接参数、运行时和能力导出拆分，入口文件不得堆积全部实现；拆分后核对 Swift/Kotlin 导出接口兼容。
 - 不使用品牌名判断能力，也不将厂商私有协议扩散到 UI 层。
 
 ## SDK 依赖
 
 - SDK 版本必须锁定，避免上游更新导致不可复现的构建或 API 漂移。
 - Android SDK 通过 Maven Central 发布；App 固定 `com.cold04:inkreaderlink-uniffi` 的准确版本。AAR 中的 `libcold04_inkreaderlink.so` 和 `uniffi.inkreaderlink_uniffi` 绑定必须由同一 SDK 源码版本构建。
-- iOS 对外 Swift 模块名为 `InkReaderLink`；当前 App 尚无 iOS 工程。
+- iOS 对外 Swift 模块名为 `InkReaderLink`。本机 Apple Silicon 构建 XCFramework 时包含 iOS 真机 arm64 与 Apple Silicon 模拟器 arm64；除非确有 Intel 模拟器验证需要，不构建或打包 `x86_64-apple-ios` slice。
 
 ## Git、版本与发布
 
