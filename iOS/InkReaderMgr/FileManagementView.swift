@@ -198,6 +198,7 @@ struct FileManagementView: View {
                         ContentUnavailableView("此目录为空", systemImage: "folder")
                     }
                 }
+                .ignoresSafeArea(.container, edges: [.top, .bottom])
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -253,7 +254,6 @@ struct FileManagementView: View {
                 }
             }
         }
-        .toolbar(currentPath.isEmpty ? .automatic : .visible, for: .navigationBar)
         .navigationDestination(item: $selectedDirectoryPath) { path in
             FileManagementView(manager: manager, showDevices: showDevices, currentPath: path)
         }

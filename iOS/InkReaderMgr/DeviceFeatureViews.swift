@@ -30,6 +30,7 @@ struct WifiManagementView: View {
             }
             return actions
         }
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
         .overlay {
             if loading && networks.isEmpty {
                 ProgressView().allowsHitTesting(false)
@@ -304,6 +305,7 @@ struct FontManagementView: View {
                 }
             }]
         }
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
         .overlay {
             if loading && catalog == nil {
                 ProgressView().allowsHitTesting(false)
@@ -439,6 +441,7 @@ struct OpdsManagementView: View {
             }
             return actions
         }
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
         .overlay {
             if loading && servers.isEmpty {
                 ProgressView().allowsHitTesting(false)
@@ -579,6 +582,7 @@ struct WallpaperManagementView: View {
                 }
             }]
         }
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
         .systemGroupedPageBackground()
         .overlay {
             if canList && loading && wallpapers.isEmpty {

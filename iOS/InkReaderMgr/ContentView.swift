@@ -120,7 +120,6 @@ struct FeatureListView: View {
             if manager.supports("wifi.list") {
                 NavigationLink {
                     WifiManagementView(manager: manager)
-                        .toolbar(.visible, for: .navigationBar)
                 } label: {
                     FeatureRow(title: "Wi-Fi 管理", icon: "wifi")
                 }
@@ -128,7 +127,6 @@ struct FeatureListView: View {
             if manager.supports("settings.list") {
                 NavigationLink {
                     DeviceSettingsView(manager: manager)
-                        .toolbar(.visible, for: .navigationBar)
                 } label: {
                     FeatureRow(title: "设备设置", icon: "gearshape")
                 }
@@ -136,7 +134,6 @@ struct FeatureListView: View {
             if manager.supports("fonts.list") {
                 NavigationLink {
                     FontManagementView(manager: manager)
-                        .toolbar(.visible, for: .navigationBar)
                 } label: {
                     FeatureRow(title: "字体管理", icon: "textformat")
                 }
@@ -144,7 +141,6 @@ struct FeatureListView: View {
             if manager.supports("opds.list") {
                 NavigationLink {
                     OpdsManagementView(manager: manager)
-                        .toolbar(.visible, for: .navigationBar)
                 } label: {
                     FeatureRow(title: "OPDS 管理", icon: "dot.radiowaves.left.and.right")
                 }
@@ -152,7 +148,6 @@ struct FeatureListView: View {
             if manager.supports("device.info") {
                 NavigationLink {
                     DeviceInformationView(manager: manager)
-                        .toolbar(.visible, for: .navigationBar)
                 } label: {
                     FeatureRow(title: "设备信息", icon: "info.circle")
                 }
@@ -160,14 +155,12 @@ struct FeatureListView: View {
             if manager.supportsAny(["wallpapers.upload", "wallpapers.manage"]) {
                 NavigationLink {
                     WallpaperManagementView(manager: manager)
-                        .toolbar(.visible, for: .navigationBar)
                 } label: {
                     FeatureRow(title: "壁纸管理", icon: "photo")
                 }
             }
             NavigationLink {
                 SoftwareSettingsView()
-                    .toolbar(.visible, for: .navigationBar)
             } label: {
                 FeatureRow(title: "软件设置", icon: "slider.horizontal.3")
             }

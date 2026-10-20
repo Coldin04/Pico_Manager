@@ -22,6 +22,7 @@ struct SendView: View {
     @State private var showingFormatReview = false
     @State private var pendingBookOverwrite: ImportedFile?
     @State private var pendingFontOverwrite: ImportedFile?
+    @State private var uploadError: String?
     @State private var error: String?
     @State private var completion: String?
 
@@ -62,6 +63,13 @@ struct SendView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 selectionList
+
+                if let uploadError {
+                    Text(uploadError)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
 
                 if !files.isEmpty {
                     Picker("类型", selection: $category) {
@@ -126,7 +134,7 @@ struct SendView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 12)
-            .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea(edges: .bottom))
+            .background(.bar)
         }
         .systemGroupedPageBackground()
         .fileImporter(
@@ -314,6 +322,7 @@ struct SendView: View {
     private func startBookUpload(overwriting fileToOverwrite: ImportedFile? = nil) {
         let eligible = acceptableBookFiles
         guard !eligible.isEmpty else { return }
+        uploadError = nil
         Task {
             for file in eligible {
                 do {
@@ -328,7 +337,7 @@ struct SendView: View {
                         pendingBookOverwrite = file
                         return
                     }
-                    self.error = errorMessage(sdkError)
+                    self.uploadError = errorMessage(sdkError)
                     finishSelection()
                     return
                 } catch {
@@ -349,6 +358,7 @@ struct SendView: View {
 
     private func startFontUpload(overwrite: Bool) {
         guard let file = fontCandidate else { return }
+        uploadError = nil
         Task {
             do {
                 try await manager.uploadFont(file, family: familyName.trimmingCharacters(in: .whitespacesAndNewlines), overwrite: overwrite)
@@ -360,7 +370,7 @@ struct SendView: View {
                    !overwrite {
                     pendingFontOverwrite = file
                 } else {
-                    error = errorMessage(sdkError)
+                    uploadError = errorMessage(sdkError)
                     finishSelection()
                 }
             } catch {
@@ -399,6 +409,7 @@ struct SendView: View {
         removeStagedFiles(files)
         files = next
         selectedDirectory = nil
+        uploadError = nil
     }
 
     private func finishSelection() {
