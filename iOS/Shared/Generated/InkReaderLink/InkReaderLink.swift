@@ -953,6 +953,15 @@ public protocol SdkDeviceClientProtocol: AnyObject, Sendable {
      * Returns validation, capability, file, transport, conflict, or protocol errors.
      */
     func uploadWallpaper(localPath: String, fileName: String, overwrite: Bool, applyToLockScreen: Bool) async throws  -> SdkWallpaperUploadResult
+
+    /**
+     * Uploads a wallpaper and reports bytes supplied to the request body.
+     *
+     * # Errors
+     *
+     * Returns validation, capability, file, transport, conflict, or protocol errors.
+     */
+    func uploadWallpaperWithProgress(localPath: String, fileName: String, overwrite: Bool, applyToLockScreen: Bool, progressObserver: SdkUploadProgressObserver) async throws  -> SdkWallpaperUploadResult
     
     /**
      * Deletes a saved Wi-Fi credential.
@@ -1655,6 +1664,29 @@ open func uploadWallpaper(localPath: String, fileName: String, overwrite: Bool, 
             rustFutureFunc: {
                 uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_upload_wallpaper(
                         self.uniffiCloneHandle(),FfiConverterString.lower(localPath),FfiConverterString.lower(fileName),FfiConverterBool.lower(overwrite),FfiConverterBool.lower(applyToLockScreen)
+                )
+            },
+            pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_inkreaderlink_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_inkreaderlink_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSdkWallpaperUploadResult_lift,
+            errorHandler: FfiConverterTypeSdkOperationError_lift
+        )
+}
+
+    /**
+     * Uploads a wallpaper and reports bytes supplied to the request body.
+     *
+     * # Errors
+     *
+     * Returns validation, capability, file, transport, conflict, or protocol errors.
+     */
+open func uploadWallpaperWithProgress(localPath: String, fileName: String, overwrite: Bool, applyToLockScreen: Bool, progressObserver: SdkUploadProgressObserver)async throws  -> SdkWallpaperUploadResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_inkreaderlink_uniffi_fn_method_sdkdeviceclient_upload_wallpaper_with_progress(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(localPath),FfiConverterString.lower(fileName),FfiConverterBool.lower(overwrite),FfiConverterBool.lower(applyToLockScreen),FfiConverterTypeSdkUploadProgressObserver_lower(progressObserver)
                 )
             },
             pollFunc: ffi_inkreaderlink_uniffi_rust_future_poll_rust_buffer,
@@ -4824,6 +4856,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload_wallpaper() != 65185) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_upload_wallpaper_with_progress() != 26375) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inkreaderlink_uniffi_checksum_method_sdkdeviceclient_delete_wifi_network() != 21087) {
