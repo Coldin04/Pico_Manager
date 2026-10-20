@@ -24,12 +24,14 @@ Copyright (C) 2026 Coldin04
 
 - [Read Pico 官方固件](https://github.com/MindReset/read_pico_firmware)
 - [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader)
-- [CrossMux](https://github.com/0x1abin/crossmux) (请使用CrossPoint适配器)
-- [RickyOS](http://chinoryunqin.github.io/RickyOS-site) (请使用CrossPoint适配器)
+- [CrossMux](https://github.com/0x1abin/crossmux) 
+- [RickyOS](http://chinoryunqin.github.io/RickyOS-site)
 - [KiikoRead](https://github.com/wegooo-cell/read-pico-reader)
 - [WhiteOS](https://446599.github.io/whiteos/)
 - [JustRead](https://flasher.smn.icu/)
-
+- [Pico Page](https://picopage.wulu.zone/install/)
+- [PageRest](https://pico.gofree.kdns.fr/)
+  
 ## 声明
 
 本项目对第三方固件或设备的兼容，不代表其作者或权利人对本项目的认可、赞助或隶属关系。项目名称中的 `Pico` 意为“小”，旨在做一个方便管理小尺寸墨水屏设备（未来可能扩展支持更多阅读设备）的工具。不表示本项目是[官方 Read Pico 应用](https://dot.mindreset.tech/docs/read_0) ，也不表示本项目与 Read Pico 存在第一方关系。
