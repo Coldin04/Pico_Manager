@@ -22,13 +22,13 @@ Copyright (C) 2026 Coldin04
 
 ## 已适配固件
 
+- [JustRead](https://flasher.smn.icu/)
 - [Read Pico 官方固件](https://github.com/MindReset/read_pico_firmware)
 - [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader)
 - [CrossMux](https://github.com/0x1abin/crossmux) 
 - [RickyOS](http://chinoryunqin.github.io/RickyOS-site)
 - [KiikoRead](https://github.com/wegooo-cell/read-pico-reader)
 - [WhiteOS](https://446599.github.io/whiteos/)
-- [JustRead](https://flasher.smn.icu/)
 - [Pico Page](https://picopage.wulu.zone/install/)
 - [PageRest](https://pico.gofree.kdns.fr/)
   
