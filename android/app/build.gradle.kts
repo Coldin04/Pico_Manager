@@ -36,8 +36,8 @@ android {
         applicationId = "com.cold04.inkreadermgr"
         minSdk = 28
         targetSdk = 36
-        versionCode = System.getenv("APP_VERSION_CODE")?.toInt() ?: 100499
-        versionName = System.getenv("APP_VERSION_NAME") ?: "0.1.4"
+        versionCode = System.getenv("APP_VERSION_CODE")?.toInt() ?: 100699
+        versionName = System.getenv("APP_VERSION_NAME") ?: "0.1.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "INKREADERLINK_SDK_VERSION", "\"$inkreaderlinkSdkVersion\"")
         buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
