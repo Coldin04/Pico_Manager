@@ -40,6 +40,8 @@ Copyright (C) 2026 Coldin04
 
 源代码采用 GNU General Public License v3.0 授权，详见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。
 
+贡献流程及拟议的贡献者许可协议见 [贡献指南](CONTRIBUTING.md)。
+
 项目名称、Logo、图标和官方展示素材不在 GPLv3 的授权范围内，详见 [TRADEMARKS.md](TRADEMARKS.md)。
 
 
